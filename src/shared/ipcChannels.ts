@@ -1,0 +1,51 @@
+export const IPC = {
+  // Recording lifecycle
+  RECORDING_START: 'recording:start',
+  RECORDING_STOP: 'recording:stop',
+  RECORDING_PAUSE: 'recording:pause',
+  RECORDING_RESUME: 'recording:resume',
+  RECORDING_STATE_CHANGED: 'recording:stateChanged',
+  RECORDING_STEP_CAPTURED: 'recording:stepCaptured',
+  RECORDING_ERROR: 'recording:error',
+
+  // Projects
+  PROJECTS_LIST: 'projects:list',
+  PROJECTS_CREATE: 'projects:create',
+  PROJECTS_GET: 'projects:get',
+  PROJECTS_UPDATE: 'projects:update',
+  PROJECTS_DELETE: 'projects:delete',
+
+  // Steps
+  STEPS_LIST: 'steps:list',
+  STEPS_UPDATE: 'steps:update',
+  STEPS_DELETE: 'steps:delete',
+  STEPS_REORDER: 'steps:reorder',
+  STEPS_UPDATE_ANNOTATIONS: 'steps:updateAnnotations',
+
+  // AI
+  AI_GENERATE_ALL: 'ai:generateAll',
+  AI_REGENERATE_STEP: 'ai:regenerateStep',
+  AI_PROGRESS: 'ai:progress',
+  AI_STEP_DONE: 'ai:stepDone',
+  AI_SET_KEY: 'ai:setKey',
+  AI_TEST_KEY: 'ai:testKey',
+  AI_CANCEL: 'ai:cancel',
+
+  // Export
+  EXPORT_PDF: 'export:pdf',
+  EXPORT_HTML: 'export:html',
+  EXPORT_MARKDOWN: 'export:markdown',
+  EXPORT_PROGRESS: 'export:progress',
+
+  // Settings
+  SETTINGS_GET: 'settings:get',
+  SETTINGS_SET: 'settings:set',
+
+  // System
+  OPEN_EXTERNAL: 'system:openExternal',
+  GET_DISPLAYS: 'system:getDisplays',
+  SHOW_SAVE_DIALOG: 'system:showSaveDialog',
+  OPEN_ITEM: 'system:openItem'
+} as const
+
+export type IpcChannel = (typeof IPC)[keyof typeof IPC]

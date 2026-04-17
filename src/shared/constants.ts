@@ -1,0 +1,10 @@
+export const DEFAULT_CROP_RADIUS = 420
+export const DEFAULT_SCREENSHOT_DELAY_MS = 350
+export const DEFAULT_AI_MODEL = 'claude-haiku-4-5-20251001'
+export const SCREENSHOT_JPEG_QUALITY = 88
+export const SCREENSHOT_MAX_WIDTH = 900
+export const AI_RATE_LIMIT_DELAY_MS = 1500
+export const MAX_TYPED_TEXT_LENGTH = 300
+export const OVERLAY_WIDTH = 300
+export const OVERLAY_HEIGHT = 80
+export const IMG_PROTOCOL = 'sopimg'
