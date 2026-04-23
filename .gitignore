@@ -3,3 +3,7 @@ dist
 out
 .env
 *.local
+
+# Keep release binaries
+!releases/
+!releases/*.exe

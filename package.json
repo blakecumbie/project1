@@ -85,7 +85,10 @@
           ]
         }
       ],
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "requestedExecutionLevel": "asInvoker",
+      "signAndEditExecutable": false,
+      "signingHashAlgorithms": null
     },
     "nsis": {
       "oneClick": false,
@@ -94,6 +97,8 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "SOP Builder",
+      "runAfterFinish": true,
+      "differentialPackage": false,
       "installerLanguages": [
         "en_US"
       ],

@@ -12,10 +12,35 @@ An AI-powered screen recording SOP (Standard Operating Procedure) document build
 - **Export** — PDF, HTML (self-contained), and Markdown formats
 - **Per-user install on Windows** — no admin privileges required
 
+## Installation (Windows 11 — no admin required)
+
+**Download the installer:** [`releases/SOP-Builder-Setup-1.0.0.exe`](releases/SOP-Builder-Setup-1.0.0.exe)
+
+1. Download the `.exe` (85 MB)
+2. Double-click to run — **no UAC prompt, no admin required**
+3. Windows SmartScreen may warn "Windows protected your PC" (the installer isn't code-signed). Click **More info** → **Run anyway**
+4. Installer places the app at `%LOCALAPPDATA%\Programs\SOP Builder\`
+5. Creates Start Menu and Desktop shortcuts in your user profile only
+6. Registers in **Add/Remove Programs** (per-user) so you can uninstall cleanly
+
+### First run
+1. Launch **SOP Builder** from the Start Menu or Desktop
+2. Go to **Settings** → paste your Anthropic API key → **Save**
+3. Click **New Recording** → configure → **Start Recording**
+4. Work through your process — the app captures silently in the background
+5. Click the floating red **Stop** button (or press `Ctrl+Shift+R`)
+6. Click **AI Descriptions** to generate step descriptions automatically
+7. Click **Export** to save as PDF, HTML, or Markdown
+
+### Known Windows considerations
+- **Input hooks**: some enterprise Group Policy settings block low-level keyboard/mouse hooks. If recording produces zero steps, your IT department has this locked down.
+- **Unsigned binary**: we don't ship a code-signing certificate. SmartScreen will warn the first time; after running once it stops.
+- **Antivirus**: rare false positives on the `uiohook-napi.node` binary (it's a low-level input hook, which AV products sometimes flag). Whitelist the install folder if needed.
+
 ## Requirements
 
 - **Anthropic API key** — get one at https://console.anthropic.com/settings/keys
-- Node.js 18+ and npm (for development/building)
+- Node.js 18+ and npm (only for development/building from source)
 
 ## Development
 
