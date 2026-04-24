@@ -13,7 +13,8 @@ import type {
   Annotation,
   IpcResult,
   DisplayInfo,
-  ExportPayload
+  ExportPayload,
+  UpdateCropPayload
 } from '../../../shared/types'
 
 declare global {
@@ -44,11 +45,13 @@ export const projects = {
 // ── Steps ─────────────────────────────────────────────────────────────────────
 export const steps = {
   list: (projectId: string) => invoke<Step[]>(IPC.STEPS_LIST, projectId),
+  get: (id: string) => invoke<Step>(IPC.STEPS_GET, id),
   update: (id: string, patch: { description?: string }) => invoke<Step>(IPC.STEPS_UPDATE, id, patch),
   delete: (id: string) => invoke<{ success: boolean }>(IPC.STEPS_DELETE, id),
   reorder: (payload: StepsReorderPayload) => invoke<{ success: boolean }>(IPC.STEPS_REORDER, payload),
   updateAnnotations: (id: string, annotations: Annotation[]) =>
-    invoke<{ success: boolean }>(IPC.STEPS_UPDATE_ANNOTATIONS, id, annotations)
+    invoke<{ success: boolean }>(IPC.STEPS_UPDATE_ANNOTATIONS, id, annotations),
+  updateCrop: (payload: UpdateCropPayload) => invoke<Step>(IPC.STEPS_UPDATE_CROP, payload)
 }
 
 // ── Recording ─────────────────────────────────────────────────────────────────

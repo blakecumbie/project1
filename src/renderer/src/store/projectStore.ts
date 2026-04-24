@@ -23,6 +23,7 @@ interface ProjectStore {
   appendStep: (step: Step) => void
   setAiProgress: (p: AiProgressPayload | null) => void
   applyAiStepDone: (p: AiStepDonePayload) => void
+  refreshStep: (stepId: string) => Promise<void>
 }
 
 export const useProjectStore = create<ProjectStore>((set, get) => ({
@@ -124,5 +125,14 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         st.id === p.stepId ? { ...st, description: p.description || st.description, aiStatus: p.aiStatus } : st
       )
     }))
+  },
+
+  refreshStep: async (stepId) => {
+    const res = await stepsApi.get(stepId)
+    if (res.data) {
+      set((s) => ({
+        activeSteps: s.activeSteps.map((st) => (st.id === stepId ? res.data! : st))
+      }))
+    }
   }
 }))

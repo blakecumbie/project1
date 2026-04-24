@@ -41,6 +41,11 @@ export interface Step {
   screenshotPath: string | null
   screenshotWidth: number | null
   screenshotHeight: number | null
+  fullScreenshotPath: string | null
+  cropX: number | null
+  cropY: number | null
+  cropRadius: number | null
+  scaleFactor: number | null
   description: string
   aiStatus: AiStatus
   aiError: string | null
@@ -64,7 +69,15 @@ export type Annotation =
     }
   | { id: string; type: 'redact'; x: number; y: number; width: number; height: number }
   | { id: string; type: 'text'; x: number; y: number; content: string; fontSize: number; color: string }
-  | { id: string; type: 'click_dot'; x: number; y: number; color: string }
+  | { id: string; type: 'click_dot'; x: number; y: number; color: string; opacity?: number }
+  | {
+      id: string
+      type: 'draw'
+      points: Array<[number, number]>
+      color: string
+      opacity: number
+      strokeWidth: number
+    }
 
 // ── Settings ───────────────────────────────────────────────────────────────────
 
@@ -144,6 +157,13 @@ export interface DisplayInfo {
   label: string
   bounds: { x: number; y: number; width: number; height: number }
   isPrimary: boolean
+}
+
+export interface UpdateCropPayload {
+  stepId: string
+  cropX: number
+  cropY: number
+  cropRadius: number
 }
 
 // ── IPC Response wrapper ───────────────────────────────────────────────────────

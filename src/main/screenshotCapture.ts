@@ -1,5 +1,4 @@
-import { desktopCapturer, screen } from 'electron'
-import { NativeImage } from 'electron'
+import { desktopCapturer, screen, nativeImage } from 'electron'
 import { DEFAULT_CROP_RADIUS, SCREENSHOT_JPEG_QUALITY } from '@shared/constants'
 
 interface CaptureOptions {
@@ -9,7 +8,18 @@ interface CaptureOptions {
   cropRadius?: number
 }
 
-export async function captureScreen(opts: CaptureOptions = {}): Promise<Buffer | null> {
+export interface CaptureResult {
+  croppedBuffer: Buffer
+  fullBuffer: Buffer
+  cropX: number
+  cropY: number
+  cropRadius: number
+  scaleFactor: number
+  displayWidth: number
+  displayHeight: number
+}
+
+export async function captureScreen(opts: CaptureOptions = {}): Promise<CaptureResult | null> {
   try {
     const { cropX, cropY, cropRadius = DEFAULT_CROP_RADIUS, displayId } = opts
 
@@ -35,7 +45,13 @@ export async function captureScreen(opts: CaptureOptions = {}): Promise<Buffer |
 
     if (!source) return null
 
-    let image: NativeImage = source.thumbnail
+    // Capture full screenshot before any cropping
+    const fullBuffer = source.thumbnail.toJPEG(SCREENSHOT_JPEG_QUALITY)
+
+    let image = source.thumbnail
+
+    const effectiveCropX = cropX ?? Math.floor(width / 2)
+    const effectiveCropY = cropY ?? Math.floor(height / 2)
 
     // Crop around the action point if coordinates provided
     if (cropX !== undefined && cropY !== undefined) {
@@ -60,7 +76,42 @@ export async function captureScreen(opts: CaptureOptions = {}): Promise<Buffer |
       image = image.resize({ width: 900 })
     }
 
-    return image.toJPEG(SCREENSHOT_JPEG_QUALITY)
+    const croppedBuffer = image.toJPEG(SCREENSHOT_JPEG_QUALITY)
+
+    return {
+      croppedBuffer,
+      fullBuffer,
+      cropX: effectiveCropX,
+      cropY: effectiveCropY,
+      cropRadius,
+      scaleFactor,
+      displayWidth: width,
+      displayHeight: height
+    }
+  } catch {
+    return null
+  }
+}
+
+export function cropFromFull(
+  fullBuffer: Buffer,
+  opts: { cropX: number; cropY: number; cropRadius: number; scaleFactor: number }
+): Buffer | null {
+  try {
+    const img = nativeImage.createFromBuffer(fullBuffer)
+    const { cropX, cropY, cropRadius, scaleFactor } = opts
+    const physX = Math.floor(cropX * scaleFactor)
+    const physY = Math.floor(cropY * scaleFactor)
+    const physRadius = Math.floor(cropRadius * scaleFactor)
+    const size = img.getSize()
+    const x = Math.max(0, physX - physRadius)
+    const y = Math.max(0, physY - physRadius)
+    const w = Math.min(size.width - x, physRadius * 2)
+    const h = Math.min(size.height - y, physRadius * 2)
+    if (w <= 0 || h <= 0) return null
+    let cropped = img.crop({ x, y, width: w, height: h })
+    if (cropped.getSize().width > 900) cropped = cropped.resize({ width: 900 })
+    return cropped.toJPEG(SCREENSHOT_JPEG_QUALITY)
   } catch {
     return null
   }
@@ -90,11 +141,9 @@ export function getClickDotPosition(
   const physCropX = Math.max(0, physX - cropRadius * scaleFactor)
   const physCropY = Math.max(0, physY - cropRadius * scaleFactor)
 
-  // Position within the cropped image
   const dotX = physX - physCropX
   const dotY = physY - physCropY
 
-  // Scale to normalized width (900px)
   const physWidth = cropRadius * 2 * scaleFactor
   const scale = physWidth > 900 ? 900 / physWidth : 1
 

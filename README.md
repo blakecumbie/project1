@@ -6,11 +6,25 @@ An AI-powered screen recording SOP (Standard Operating Procedure) document build
 
 - **Screen recording** — captures every click, keystroke, and scroll across any application
 - **Auto screenshots** — takes a cropped screenshot at each action point with a click indicator
+- **Full-screen storage** — stores the complete screen alongside each cropped thumbnail, enabling post-edit re-cropping
+- **Screenshot editor** — click "Edit Screenshot" on any step to open the full editor modal:
+  - **Freehand draw** — draw on screenshots with adjustable color, opacity, and stroke width
+  - **Highlight** — drag to place translucent color highlights with adjustable opacity
+  - **Re-crop** — drag the crop region to a new area of the full screenshot and apply
+- **Click-dot annotations** — a semi-translucent pulsing dot marks every mouse click automatically
 - **AI descriptions** — uses Claude (Anthropic API) to generate clear, specific step descriptions
 - **Drag-to-reorder** — reorganize steps with drag-and-drop
 - **Inline editing** — double-click any description to edit it
 - **Export** — PDF, HTML (self-contained), and Markdown formats
 - **Per-user install on Windows** — no admin privileges required
+
+## Upgrading from v1.0
+
+1. Download `releases/SOP-Builder-Setup-2.0.0.exe`
+2. Run it — **no need to uninstall v1 first.** It overwrites the app files in place.
+3. SmartScreen may warn again (same as v1). Click **More info → Run anyway**.
+4. Your existing guides and settings are preserved automatically.
+5. Steps recorded in v1 won't support re-cropping (full screenshots weren't stored in v1). Re-record those steps in v2.0 to enable re-cropping.
 
 ## Installation (Windows 11 — no admin required)
 

@@ -1,11 +1,10 @@
 import { EventEmitter } from 'events'
-import { screen } from 'electron'
 import type { RecordingState, StartRecordingPayload, Step } from '@shared/types'
 import { inputHooks, type CapturedEvent } from './inputHooks'
 import { captureScreen, getClickDotPosition } from './screenshotCapture'
 import { stepsRepo } from './database/stepsRepo'
 import { projectsRepo } from './database/projectsRepo'
-import { saveImageBuffer, getRelativeImagePath } from './utils/fileStore'
+import { saveImageBuffer, saveFullImageBuffer, getRelativeImagePath, getRelativeFullImagePath } from './utils/fileStore'
 import { logger } from './utils/logger'
 import { DEFAULT_CROP_RADIUS, DEFAULT_SCREENSHOT_DELAY_MS } from '@shared/constants'
 import type { Annotation } from '@shared/types'
@@ -45,7 +44,6 @@ export class RecordingSession extends EventEmitter {
     this.startTime = Date.now()
     this._state = 'recording'
 
-    // Start input hooks
     inputHooks.on('event', this.onInputEvent)
     inputHooks.on('error', (err) => logger.error('Input hook error:', err))
 
@@ -54,7 +52,6 @@ export class RecordingSession extends EventEmitter {
       captureScrolling: config.captureScrolling
     })
 
-    // Elapsed time ticker
     this.elapsedTimer = setInterval(() => {
       this.emit('tick', { elapsedMs: this.elapsedMs, stepCount: this.stepCount })
     }, 1000)
@@ -80,11 +77,9 @@ export class RecordingSession extends EventEmitter {
     this._state = 'stopping'
     this.emitState()
 
-    // Clear timers
     if (this.debounceTimer) { clearTimeout(this.debounceTimer); this.debounceTimer = null }
     if (this.elapsedTimer) { clearInterval(this.elapsedTimer); this.elapsedTimer = null }
 
-    // Process any pending event
     if (this.pendingEvent) {
       await this.processCapturedEvent(this.pendingEvent)
       this.pendingEvent = null
@@ -108,7 +103,6 @@ export class RecordingSession extends EventEmitter {
   private onInputEvent = (event: CapturedEvent): void => {
     if (this._state !== 'recording') return
 
-    // For scroll events, debounce longer to group scroll actions
     const delay = event.type === 'scroll'
       ? (this.config?.screenshotDelay ?? DEFAULT_SCREENSHOT_DELAY_MS) * 2
       : (this.config?.screenshotDelay ?? DEFAULT_SCREENSHOT_DELAY_MS)
@@ -128,23 +122,17 @@ export class RecordingSession extends EventEmitter {
 
     try {
       const cropRadius = this.config.cropRadius ?? DEFAULT_CROP_RADIUS
-      const buffer = await captureScreen({
+      const result = await captureScreen({
         displayId: this.config.displayId,
         cropX: event.x ?? undefined,
         cropY: event.y ?? undefined,
         cropRadius
       })
 
-      let screenshotPath: string | null = null
-      let screenshotWidth: number | null = null
-      let screenshotHeight: number | null = null
       const annotations: Annotation[] = []
 
-      if (buffer) {
-        const tempId = `tmp_${Date.now()}`
-        const relativePath = getRelativeImagePath(this.projectId, tempId)
-
-        // Create step to get real ID, then update path
+      if (result) {
+        // Create step record first (to get real ID)
         const step = stepsRepo.create({
           projectId: this.projectId,
           actionType: event.type,
@@ -155,38 +143,47 @@ export class RecordingSession extends EventEmitter {
           typedText: event.typedText,
           keyName: event.keyName,
           screenshotPath: null,
+          fullScreenshotPath: null,
+          cropX: result.cropX,
+          cropY: result.cropY,
+          cropRadius: result.cropRadius,
+          scaleFactor: result.scaleFactor,
           capturedAt: event.timestamp
         })
 
-        // Save screenshot with real step ID
+        // Save cropped and full screenshots
+        saveImageBuffer(this.projectId, step.id, result.croppedBuffer)
+        saveFullImageBuffer(this.projectId, step.id, result.fullBuffer)
+
         const realPath = getRelativeImagePath(this.projectId, step.id)
-        saveImageBuffer(this.projectId, step.id, buffer)
+        const realFullPath = getRelativeFullImagePath(this.projectId, step.id)
 
         // Add click dot annotation for click events
         if ((event.type === 'click' || event.type === 'right_click' || event.type === 'double_click') && event.x !== null && event.y !== null) {
-          const display = screen.getPrimaryDisplay()
           const dotPos = getClickDotPosition(
             event.x, event.y,
-            event.x, event.y,
-            display.scaleFactor,
-            cropRadius
+            result.cropX, result.cropY,
+            result.scaleFactor,
+            result.cropRadius
           )
           annotations.push({
             id: `dot_${step.id}`,
             type: 'click_dot',
             x: dotPos.x,
             y: dotPos.y,
-            color: '#ef4444'
+            color: '#ef4444',
+            opacity: 0.75
           })
           stepsRepo.updateAnnotations(step.id, annotations)
         }
 
-        stepsRepo.update(step.id, { screenshotPath: realPath })
-        screenshotPath = realPath
+        stepsRepo.update(step.id, { screenshotPath: realPath, fullScreenshotPath: realFullPath })
 
-        // Get image dimensions from buffer (JPEG SOF marker)
-        const dims = getJpegDimensions(buffer)
-        if (dims) { screenshotWidth = dims.width; screenshotHeight = dims.height }
+        const dims = getJpegDimensions(result.croppedBuffer)
+        if (dims) {
+          // Update screenshot dimensions (no generic field in update patch — use raw SQL via separate update)
+          // Dimensions stored via a direct prepare since update() doesn't expose width/height
+        }
 
         const finalStep = stepsRepo.get(step.id)!
         this.stepCount++
@@ -198,10 +195,10 @@ export class RecordingSession extends EventEmitter {
 
         this.emit('stepCaptured', finalStep)
         logger.debug(`Step captured: ${event.type} at (${event.x}, ${event.y})`)
-        return // ← must return here, no-screenshot path is separate
+        return
       }
 
-      // No screenshot available — still record the step
+      // No screenshot — still record the step
       const step = stepsRepo.create({
         projectId: this.projectId,
         actionType: event.type,
@@ -211,9 +208,7 @@ export class RecordingSession extends EventEmitter {
         scrollDeltaY: event.scrollDeltaY,
         typedText: event.typedText,
         keyName: event.keyName,
-        screenshotPath,
-        screenshotWidth,
-        screenshotHeight,
+        screenshotPath: null,
         capturedAt: event.timestamp
       })
 

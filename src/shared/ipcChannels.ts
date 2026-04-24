@@ -17,10 +17,12 @@ export const IPC = {
 
   // Steps
   STEPS_LIST: 'steps:list',
+  STEPS_GET: 'steps:get',
   STEPS_UPDATE: 'steps:update',
   STEPS_DELETE: 'steps:delete',
   STEPS_REORDER: 'steps:reorder',
   STEPS_UPDATE_ANNOTATIONS: 'steps:updateAnnotations',
+  STEPS_UPDATE_CROP: 'steps:updateCrop',
 
   // AI
   AI_GENERATE_ALL: 'ai:generateAll',

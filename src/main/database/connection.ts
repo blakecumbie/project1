@@ -61,6 +61,30 @@ CREATE INDEX IF NOT EXISTS idx_steps_project_order ON steps(project_id, order_in
 CREATE INDEX IF NOT EXISTS idx_steps_ai_pending ON steps(project_id, ai_status) WHERE ai_status = 'pending';
 `
 
+const MIGRATIONS = [
+  {
+    version: 1,
+    alters: [
+      'ALTER TABLE steps ADD COLUMN full_screenshot_path TEXT',
+      'ALTER TABLE steps ADD COLUMN crop_x INTEGER',
+      'ALTER TABLE steps ADD COLUMN crop_y INTEGER',
+      'ALTER TABLE steps ADD COLUMN crop_radius INTEGER',
+      'ALTER TABLE steps ADD COLUMN scale_factor REAL'
+    ]
+  }
+]
+
+function runMigrations(database: Database.Database): void {
+  for (const m of MIGRATIONS) {
+    const already = database.prepare('SELECT 1 FROM schema_migrations WHERE version = ?').get(m.version)
+    if (already) continue
+    for (const sql of m.alters) {
+      try { database.exec(sql) } catch { /* column may already exist */ }
+    }
+    database.prepare('INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)').run(m.version, Date.now())
+  }
+}
+
 export function initDatabase(): Database.Database {
   const dbDir = join(app.getPath('userData'), 'data')
   mkdirSync(dbDir, { recursive: true })
@@ -68,6 +92,7 @@ export function initDatabase(): Database.Database {
 
   db = new Database(dbPath)
   db.exec(SCHEMA)
+  runMigrations(db)
 
   return db
 }

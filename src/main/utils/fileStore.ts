@@ -45,3 +45,15 @@ export function ensureDir(path: string): void {
   const dir = dirname(path)
   mkdirSync(dir, { recursive: true })
 }
+
+export function getRelativeFullImagePath(projectId: string, stepId: string): string {
+  return `${projectId}/${stepId}_full.jpg`
+}
+
+export function saveFullImageBuffer(projectId: string, stepId: string, buffer: Buffer): void {
+  writeFileSync(join(getImagesDir(projectId), `${stepId}_full.jpg`), buffer)
+}
+
+export function resolveFullImagePath(relativePath: string): string {
+  return join(app.getPath('userData'), 'images', relativePath)
+}
