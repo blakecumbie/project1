@@ -41,25 +41,40 @@ export function ScreenshotEditor({ step, onClose }: Props): React.ReactElement {
   const [currentStroke, setCurrentStroke] = useState<Array<[number, number]>>([])
   const [highlightDraft, setHighlightDraft] = useState<HighlightDraft | null>(null)
 
+  // cropRect is kept in the FULL image's natural-pixel coordinate space.
+  // step.cropX/Y/Radius are stored in display logical pixels, so multiply
+  // by scaleFactor on init. When applying, we divide by scaleFactor to
+  // convert back to logical pixels for the IPC payload.
   const [cropRect, setCropRect] = useState({
-    x: step.cropX ?? 500,
-    y: step.cropY ?? 400,
-    radius: step.cropRadius ?? DEFAULT_CROP_RADIUS
+    x: (step.cropX ?? 500) * (step.scaleFactor ?? 1),
+    y: (step.cropY ?? 400) * (step.scaleFactor ?? 1),
+    radius: (step.cropRadius ?? DEFAULT_CROP_RADIUS) * (step.scaleFactor ?? 1)
   })
   const [cropDragging, setCropDragging] = useState(false)
   const [cropDrag, setCropDrag] = useState<CropDrag | null>(null)
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Track natural dimensions in state so the SVG viewBox actually re-renders
+  // when the image swaps between cropped and full. imgRef.current accesses
+  // alone don't trigger React updates.
+  const [imgDims, setImgDims] = useState<{ w: number; h: number }>({ w: 900, h: 600 })
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  const showingFull = Boolean(step.fullScreenshotPath)
+  const hasFull = Boolean(step.fullScreenshotPath)
+  // CRITICAL: Show the cropped image for draw/highlight so annotation
+  // coordinates (which are stored in cropped-image pixel space) line up
+  // exactly with how StepCard renders them. Only switch to the full image
+  // for the re-crop tool, which inherently needs the full screenshot.
+  const showingFull = tool === 'recrop' && hasFull
   const imgUrl = showingFull
     ? imgSrc(step.fullScreenshotPath!)
     : imgSrc(step.screenshotPath ?? '')
+
+  const sf = step.scaleFactor ?? 1
 
   // Convert mouse event → natural image coordinates
   const toImgCoords = useCallback((e: React.MouseEvent): [number, number] => {
@@ -257,11 +272,13 @@ export function ScreenshotEditor({ step, onClose }: Props): React.ReactElement {
   const handleApplyCrop = async () => {
     setSaving(true)
     setError(null)
+    // cropRect is in FULL image natural-pixel coords; convert back to
+    // display logical pixels (the storage/IPC format)
     const result = await stepsApi.updateCrop({
       stepId: step.id,
-      cropX: Math.round(cropRect.x),
-      cropY: Math.round(cropRect.y),
-      cropRadius: Math.round(cropRect.radius)
+      cropX: Math.round(cropRect.x / sf),
+      cropY: Math.round(cropRect.y / sf),
+      cropRadius: Math.round(cropRect.radius / sf)
     })
     if (result.data) {
       await refreshStep(step.id)
@@ -356,17 +373,17 @@ export function ScreenshotEditor({ step, onClose }: Props): React.ReactElement {
           </>
         )}
 
-        {/* Re-crop radius control */}
+        {/* Re-crop radius control (slider value in logical px, internal state in physical px) */}
         {tool === 'recrop' && (
           <div className="flex items-center gap-2">
             <label className="text-xs text-slate-400">Crop size</label>
             <input
               type="range" min="100" max="800" step="10"
-              value={cropRect.radius}
-              onChange={(e) => setCropRect(prev => ({ ...prev, radius: parseInt(e.target.value) }))}
+              value={Math.round(cropRect.radius / sf)}
+              onChange={(e) => setCropRect(prev => ({ ...prev, radius: parseInt(e.target.value) * sf }))}
               className="w-28"
             />
-            <span className="text-xs text-slate-400">{cropRect.radius * 2}px</span>
+            <span className="text-xs text-slate-400">{Math.round(cropRect.radius * 2 / sf)}px</span>
           </div>
         )}
 
@@ -412,28 +429,45 @@ export function ScreenshotEditor({ step, onClose }: Props): React.ReactElement {
               alt="Screenshot"
               className="block max-h-[75vh] max-w-full object-contain select-none"
               draggable={false}
-              onLoad={redrawCanvas}
+              onLoad={() => {
+                const img = imgRef.current
+                if (img) setImgDims({ w: img.naturalWidth, h: img.naturalHeight })
+                redrawCanvas()
+              }}
             />
             {/* Committed annotations overlay (SVG, below the canvas) */}
-            <svg
-              className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
-              viewBox={`0 0 ${imgRef.current?.naturalWidth ?? 900} ${imgRef.current?.naturalHeight ?? 600}`}
-              preserveAspectRatio="none"
-            >
-              {annotations.map((a) => {
-                if (a.type === 'highlight') {
-                  return <rect key={a.id} x={a.x} y={a.y} width={a.width} height={a.height} fill={a.color} opacity={a.opacity} />
-                }
-                if (a.type === 'draw' && a.points.length >= 2) {
-                  const d = a.points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ')
-                  return <path key={a.id} d={d} stroke={a.color} strokeWidth={a.strokeWidth} strokeOpacity={a.opacity} fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                }
-                if (a.type === 'click_dot') {
-                  return <circle key={a.id} cx={a.x} cy={a.y} r={10} fill={a.color} opacity={a.opacity ?? 0.75} />
-                }
-                return null
-              })}
-            </svg>
+            {/* Existing annotations are stored in cropped-image coordinates.
+                Only render them when the cropped image is visible (draw/highlight
+                modes). In re-crop mode the full image is shown, where these
+                coordinates do not translate. */}
+            {tool !== 'recrop' && (
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
+                viewBox={`0 0 ${imgDims.w} ${imgDims.h}`}
+                preserveAspectRatio="none"
+              >
+                {annotations.map((a) => {
+                  if (a.type === 'highlight') {
+                    return <rect key={a.id} x={a.x} y={a.y} width={a.width} height={a.height} fill={a.color} opacity={a.opacity} />
+                  }
+                  if (a.type === 'draw' && a.points.length >= 2) {
+                    const d = a.points.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x},${y}`).join(' ')
+                    return <path key={a.id} d={d} stroke={a.color} strokeWidth={a.strokeWidth} strokeOpacity={a.opacity} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  }
+                  if (a.type === 'click_dot') {
+                    const r = Math.max(8, Math.round(imgDims.w * 0.014))
+                    return (
+                      <circle
+                        key={a.id} cx={a.x} cy={a.y} r={r}
+                        fill={a.color} opacity={a.opacity ?? 0.75}
+                        stroke="white" strokeWidth={Math.max(2, r * 0.25)}
+                      />
+                    )
+                  }
+                  return null
+                })}
+              </svg>
+            )}
             {/* Interactive canvas overlay */}
             <canvas
               ref={canvasRef}

@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events'
-import type { RecordingState, StartRecordingPayload, Step } from '@shared/types'
+import type { RecordingState, StartRecordingPayload } from '@shared/types'
 import { inputHooks, type CapturedEvent } from './inputHooks'
-import { captureScreen, getClickDotPosition } from './screenshotCapture'
+import { captureScreen, getClickDotPosition, getJpegDimensions } from './screenshotCapture'
 import { stepsRepo } from './database/stepsRepo'
 import { projectsRepo } from './database/projectsRepo'
 import { saveImageBuffer, saveFullImageBuffer, getRelativeImagePath, getRelativeFullImagePath } from './utils/fileStore'
@@ -18,6 +18,10 @@ export class RecordingSession extends EventEmitter {
   private stepCount = 0
   private startTime = 0
   private elapsedTimer: ReturnType<typeof setInterval> | null = null
+
+  // Serial processing queue — guarantees events are persisted in chronological order
+  // even when screen capture for one event is slower than the next.
+  private processQueue: Promise<void> = Promise.resolve()
 
   get state(): RecordingState {
     return this._state
@@ -43,6 +47,7 @@ export class RecordingSession extends EventEmitter {
     this.stepCount = 0
     this.startTime = Date.now()
     this._state = 'recording'
+    this.processQueue = Promise.resolve()
 
     inputHooks.on('event', this.onInputEvent)
     inputHooks.on('error', (err) => logger.error('Input hook error:', err))
@@ -81,9 +86,12 @@ export class RecordingSession extends EventEmitter {
     if (this.elapsedTimer) { clearInterval(this.elapsedTimer); this.elapsedTimer = null }
 
     if (this.pendingEvent) {
-      await this.processCapturedEvent(this.pendingEvent)
+      this.enqueue(this.pendingEvent)
       this.pendingEvent = null
     }
+
+    // Wait for any queued events to fully process before tearing down
+    await this.processQueue
 
     inputHooks.off('event', this.onInputEvent)
     inputHooks.stop()
@@ -110,11 +118,17 @@ export class RecordingSession extends EventEmitter {
     this.pendingEvent = event
 
     if (this.debounceTimer) clearTimeout(this.debounceTimer)
-    this.debounceTimer = setTimeout(async () => {
+    this.debounceTimer = setTimeout(() => {
       const ev = this.pendingEvent
       this.pendingEvent = null
-      if (ev) await this.processCapturedEvent(ev)
+      if (ev) this.enqueue(ev)
     }, delay)
+  }
+
+  // Append the event to the serial queue. Events are guaranteed to be processed
+  // in the order they were enqueued — fixes out-of-order steps when capture races.
+  private enqueue(event: CapturedEvent): void {
+    this.processQueue = this.processQueue.then(() => this.processCapturedEvent(event))
   }
 
   private async processCapturedEvent(event: CapturedEvent): Promise<void> {
@@ -129,10 +143,11 @@ export class RecordingSession extends EventEmitter {
         cropRadius
       })
 
-      const annotations: Annotation[] = []
-
       if (result) {
-        // Create step record first (to get real ID)
+        const dims = getJpegDimensions(result.croppedBuffer)
+        const screenshotWidth = dims?.width ?? null
+        const screenshotHeight = dims?.height ?? null
+
         const step = stepsRepo.create({
           projectId: this.projectId,
           actionType: event.type,
@@ -143,6 +158,8 @@ export class RecordingSession extends EventEmitter {
           typedText: event.typedText,
           keyName: event.keyName,
           screenshotPath: null,
+          screenshotWidth,
+          screenshotHeight,
           fullScreenshotPath: null,
           cropX: result.cropX,
           cropY: result.cropY,
@@ -151,39 +168,37 @@ export class RecordingSession extends EventEmitter {
           capturedAt: event.timestamp
         })
 
-        // Save cropped and full screenshots
         saveImageBuffer(this.projectId, step.id, result.croppedBuffer)
         saveFullImageBuffer(this.projectId, step.id, result.fullBuffer)
 
         const realPath = getRelativeImagePath(this.projectId, step.id)
         const realFullPath = getRelativeFullImagePath(this.projectId, step.id)
 
-        // Add click dot annotation for click events
-        if ((event.type === 'click' || event.type === 'right_click' || event.type === 'double_click') && event.x !== null && event.y !== null) {
+        // Click-dot annotation, in cropped image pixel coordinates
+        if (
+          (event.type === 'click' || event.type === 'right_click' || event.type === 'double_click') &&
+          event.x !== null && event.y !== null &&
+          screenshotWidth && screenshotHeight
+        ) {
           const dotPos = getClickDotPosition(
             event.x, event.y,
             result.cropX, result.cropY,
-            result.scaleFactor,
-            result.cropRadius
+            result.cropRadius,
+            result.displayWidth, result.displayHeight,
+            screenshotWidth, screenshotHeight
           )
-          annotations.push({
+          const annotations: Annotation[] = [{
             id: `dot_${step.id}`,
             type: 'click_dot',
             x: dotPos.x,
             y: dotPos.y,
             color: '#ef4444',
             opacity: 0.75
-          })
+          }]
           stepsRepo.updateAnnotations(step.id, annotations)
         }
 
         stepsRepo.update(step.id, { screenshotPath: realPath, fullScreenshotPath: realFullPath })
-
-        const dims = getJpegDimensions(result.croppedBuffer)
-        if (dims) {
-          // Update screenshot dimensions (no generic field in update patch — use raw SQL via separate update)
-          // Dimensions stored via a direct prepare since update() doesn't expose width/height
-        }
 
         const finalStep = stepsRepo.get(step.id)!
         this.stepCount++
@@ -198,7 +213,7 @@ export class RecordingSession extends EventEmitter {
         return
       }
 
-      // No screenshot — still record the step
+      // No screenshot — still record the step (rare)
       const step = stepsRepo.create({
         projectId: this.projectId,
         actionType: event.type,
@@ -228,25 +243,6 @@ export class RecordingSession extends EventEmitter {
       elapsedMs: this.elapsedMs
     })
   }
-}
-
-// Quick JPEG dimension parser (reads SOF0 marker)
-function getJpegDimensions(buffer: Buffer): { width: number; height: number } | null {
-  try {
-    let i = 2
-    while (i < buffer.length) {
-      if (buffer[i] !== 0xff) break
-      const marker = buffer[i + 1]
-      const len = buffer.readUInt16BE(i + 2)
-      if (marker >= 0xc0 && marker <= 0xc3) {
-        const height = buffer.readUInt16BE(i + 5)
-        const width = buffer.readUInt16BE(i + 7)
-        return { width, height }
-      }
-      i += 2 + len
-    }
-  } catch {}
-  return null
 }
 
 export const recordingSession = new RecordingSession()

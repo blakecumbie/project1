@@ -18,17 +18,25 @@ An AI-powered screen recording SOP (Standard Operating Procedure) document build
 - **Export** — PDF, HTML (self-contained), and Markdown formats
 - **Per-user install on Windows** — no admin privileges required
 
-## Upgrading from v1.0
+## What's new in v2.1 (bug fixes)
 
-1. Download `releases/SOP-Builder-Setup-2.0.0.exe`
-2. Run it — **no need to uninstall v1 first.** It overwrites the app files in place.
-3. SmartScreen may warn again (same as v1). Click **More info → Run anyway**.
+- **Steps land in chronological order** — events are now processed through a serial queue, so a slow screen capture for one event no longer lets the next event's step jump ahead.
+- **Click dot stays glued to the click point** — was previously rendered with absolute pixel positioning over a responsive image, causing it to drift as the container resized. Now rendered as an SVG circle that scales with the screenshot.
+- **Highlights and drawings stay where you put them** — the editor now displays the cropped image (the same view shown in the guide) for draw/highlight tools, so coordinates match. Switching to re-crop mode swaps in the full screenshot for crop selection.
+- **Inline description editing** — `Ctrl+Enter` saves, `Esc` cancels, and the textarea no longer shows a stale value when an AI-generated description arrives after mount.
+- **Screenshot dimensions persisted** — fixes alignment of all SVG annotations against the actual image (was previously falling back to a 900×600 viewBox).
+
+## Upgrading from v1.x or v2.0
+
+1. Download `releases/SOP-Builder-Setup-2.1.0.exe`
+2. Run it — **no need to uninstall the previous version first.** It overwrites the app files in place.
+3. SmartScreen may warn again. Click **More info → Run anyway**.
 4. Your existing guides and settings are preserved automatically.
-5. Steps recorded in v1 won't support re-cropping (full screenshots weren't stored in v1). Re-record those steps in v2.0 to enable re-cropping.
+5. Steps recorded in v1 won't support re-cropping (full screenshots weren't stored in v1). Re-record those steps to enable re-cropping. Steps recorded in v2.0 will work normally; click-dots and existing annotations on those steps may need a one-time refresh by reopening the project.
 
 ## Installation (Windows 11 — no admin required)
 
-**Download the installer:** [`releases/SOP-Builder-Setup-1.0.0.exe`](releases/SOP-Builder-Setup-1.0.0.exe)
+**Latest installer:** [`releases/SOP-Builder-Setup-2.1.0.exe`](releases/SOP-Builder-Setup-2.1.0.exe)
 
 1. Download the `.exe` (85 MB)
 2. Double-click to run — **no UAC prompt, no admin required**

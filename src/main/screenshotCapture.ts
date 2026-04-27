@@ -127,25 +127,57 @@ export async function getDisplayList(): Promise<{ id: string; label: string; isP
   }))
 }
 
-// Returns the click dot position in the cropped image's coordinate space
+// Returns the click dot position in the cropped image's pixel coordinate space.
+// Uses the actual cropped image dimensions and the actual crop bounds (clamped to display)
+// so the dot lands correctly even when:
+//   - the crop is near a screen edge (clamped)
+//   - cropX/cropY differ from eventX/eventY (after a user re-crop)
 export function getClickDotPosition(
   eventX: number,
   eventY: number,
   cropX: number,
   cropY: number,
-  scaleFactor: number,
-  cropRadius: number
+  cropRadius: number,
+  displayWidth: number,
+  displayHeight: number,
+  croppedImageWidth: number,
+  croppedImageHeight: number
 ): { x: number; y: number } {
-  const physX = eventX * scaleFactor
-  const physY = eventY * scaleFactor
-  const physCropX = Math.max(0, physX - cropRadius * scaleFactor)
-  const physCropY = Math.max(0, physY - cropRadius * scaleFactor)
+  const left = Math.max(0, cropX - cropRadius)
+  const top = Math.max(0, cropY - cropRadius)
+  const right = Math.min(displayWidth, cropX + cropRadius)
+  const bottom = Math.min(displayHeight, cropY + cropRadius)
+  const cropLogicalWidth = right - left
+  const cropLogicalHeight = bottom - top
 
-  const dotX = physX - physCropX
-  const dotY = physY - physCropY
+  if (cropLogicalWidth <= 0 || cropLogicalHeight <= 0 || croppedImageWidth <= 0 || croppedImageHeight <= 0) {
+    return { x: 0, y: 0 }
+  }
 
-  const physWidth = cropRadius * 2 * scaleFactor
-  const scale = physWidth > 900 ? 900 / physWidth : 1
+  const dotInCropX = eventX - left
+  const dotInCropY = eventY - top
 
-  return { x: Math.round(dotX * scale), y: Math.round(dotY * scale) }
+  return {
+    x: Math.round((dotInCropX / cropLogicalWidth) * croppedImageWidth),
+    y: Math.round((dotInCropY / cropLogicalHeight) * croppedImageHeight)
+  }
+}
+
+// Quick JPEG dimension parser (reads SOF0 marker)
+export function getJpegDimensions(buffer: Buffer): { width: number; height: number } | null {
+  try {
+    let i = 2
+    while (i < buffer.length) {
+      if (buffer[i] !== 0xff) break
+      const marker = buffer[i + 1]
+      const len = buffer.readUInt16BE(i + 2)
+      if (marker >= 0xc0 && marker <= 0xc3) {
+        const height = buffer.readUInt16BE(i + 5)
+        const width = buffer.readUInt16BE(i + 7)
+        return { width, height }
+      }
+      i += 2 + len
+    }
+  } catch {}
+  return null
 }

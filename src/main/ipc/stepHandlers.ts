@@ -4,7 +4,7 @@ import { IPC } from '@shared/ipcChannels'
 import { stepsRepo } from '../database/stepsRepo'
 import { projectsRepo } from '../database/projectsRepo'
 import { deleteImageFile, saveImageBuffer, getRelativeImagePath, resolveFullImagePath } from '../utils/fileStore'
-import { cropFromFull, getClickDotPosition } from '../screenshotCapture'
+import { cropFromFull, getClickDotPosition, getJpegDimensions } from '../screenshotCapture'
 import type { StepsReorderPayload, Annotation, UpdateCropPayload } from '@shared/types'
 
 export function registerStepHandlers(): void {
@@ -37,25 +37,37 @@ export function registerStepHandlers(): void {
 
       const fullAbsPath = resolveFullImagePath(step.fullScreenshotPath)
       const fullBuffer = readFileSync(fullAbsPath)
+      const scaleFactor = step.scaleFactor ?? 1
       const cropped = cropFromFull(fullBuffer, {
         cropX: payload.cropX,
         cropY: payload.cropY,
         cropRadius: payload.cropRadius,
-        scaleFactor: step.scaleFactor ?? 1
+        scaleFactor
       })
       if (!cropped) return { error: 'Crop operation failed' }
 
       saveImageBuffer(step.projectId, step.id, cropped)
 
-      // Recalculate click_dot position with the new crop params
+      // Derive display logical dimensions from the full screenshot, and the new
+      // cropped image's actual pixel dimensions, for accurate click-dot placement.
+      const fullDims = getJpegDimensions(fullBuffer)
+      const croppedDims = getJpegDimensions(cropped)
+      const displayWidth = fullDims ? fullDims.width / scaleFactor : 0
+      const displayHeight = fullDims ? fullDims.height / scaleFactor : 0
+
       const otherAnnotations = step.annotations.filter(a => a.type !== 'click_dot')
       const existingDot = step.annotations.find(a => a.type === 'click_dot')
-      if (existingDot && existingDot.type === 'click_dot' && step.x !== null && step.y !== null) {
+      if (
+        existingDot && existingDot.type === 'click_dot' &&
+        step.x !== null && step.y !== null &&
+        croppedDims && displayWidth > 0 && displayHeight > 0
+      ) {
         const newDotPos = getClickDotPosition(
           step.x, step.y,
           payload.cropX, payload.cropY,
-          step.scaleFactor ?? 1,
-          payload.cropRadius
+          payload.cropRadius,
+          displayWidth, displayHeight,
+          croppedDims.width, croppedDims.height
         )
         otherAnnotations.push({ ...existingDot, x: newDotPos.x, y: newDotPos.y })
       }
@@ -65,6 +77,8 @@ export function registerStepHandlers(): void {
         cropX: payload.cropX,
         cropY: payload.cropY,
         cropRadius: payload.cropRadius,
+        screenshotWidth: croppedDims?.width ?? null,
+        screenshotHeight: croppedDims?.height ?? null,
         annotations: otherAnnotations
       })
       return { data: updated }

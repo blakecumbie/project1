@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { Trash2, GripVertical, Loader2, Sparkles, Edit2, Check, X, PencilLine } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -24,6 +24,13 @@ export function StepCard({ step, index, projectTitle }: Props): React.ReactEleme
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: step.id })
 
   const style = { transform: CSS.Transform.toString(transform), transition }
+
+  // Keep editText in sync with step.description when not actively editing.
+  // Without this, an AI-generated description that arrives after mount leaves
+  // editText stale — clicking Edit would show the stale value briefly.
+  useEffect(() => {
+    if (!isEditing) setEditText(step.description)
+  }, [step.description, isEditing])
 
   const startEdit = () => {
     setEditText(step.description)
@@ -52,6 +59,8 @@ export function StepCard({ step, index, projectTitle }: Props): React.ReactEleme
   }
 
   const isAiLoading = step.aiStatus === 'processing'
+  const vbW = step.screenshotWidth ?? 900
+  const vbH = step.screenshotHeight ?? 600
 
   return (
     <>
@@ -85,11 +94,11 @@ export function StepCard({ step, index, projectTitle }: Props): React.ReactEleme
                   className="w-full h-auto block"
                   draggable={false}
                 />
-                {/* SVG layer for draw strokes and highlight rects */}
-                {step.annotations.some(a => a.type === 'draw' || a.type === 'highlight') && (
+                {/* All annotations (including click_dot) rendered in SVG so coords scale with image */}
+                {step.annotations.length > 0 && (
                   <svg
-                    className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
-                    viewBox={`0 0 ${step.screenshotWidth ?? 900} ${step.screenshotHeight ?? 600}`}
+                    className="absolute inset-0 w-full h-full pointer-events-none"
+                    viewBox={`0 0 ${vbW} ${vbH}`}
                     preserveAspectRatio="none"
                   >
                     {step.annotations.map((a) => {
@@ -113,30 +122,40 @@ export function StepCard({ step, index, projectTitle }: Props): React.ReactEleme
                           />
                         )
                       }
+                      if (a.type === 'click_dot') {
+                        // Dot radius in viewBox units — slightly larger for better visibility
+                        const r = Math.max(8, Math.round(vbW * 0.014))
+                        const opacity = a.opacity ?? 0.75
+                        return (
+                          <g key={a.id}>
+                            {/* Pulse ring (animated via SMIL — preserves animation in SVG) */}
+                            <circle cx={a.x} cy={a.y} r={r} fill={a.color} opacity={0.35}>
+                              <animate
+                                attributeName="r"
+                                values={`${r};${r * 1.8};${r}`}
+                                dur="1.6s"
+                                repeatCount="indefinite"
+                              />
+                              <animate
+                                attributeName="opacity"
+                                values="0.35;0;0.35"
+                                dur="1.6s"
+                                repeatCount="indefinite"
+                              />
+                            </circle>
+                            {/* Solid dot */}
+                            <circle
+                              cx={a.x} cy={a.y} r={r}
+                              fill={a.color} opacity={opacity}
+                              stroke="white" strokeWidth={Math.max(2, r * 0.25)}
+                            />
+                          </g>
+                        )
+                      }
                       return null
                     })}
                   </svg>
                 )}
-                {/* Click dot overlays */}
-                {step.annotations.filter((a) => a.type === 'click_dot').map((a) => {
-                  if (a.type !== 'click_dot') return null
-                  return (
-                    <div
-                      key={a.id}
-                      className="absolute pointer-events-none"
-                      style={{ left: a.x - 10, top: a.y - 10 }}
-                    >
-                      <div
-                        className="absolute inset-0 rounded-full bg-red-400 animate-ping"
-                        style={{ opacity: 0.35 }}
-                      />
-                      <div
-                        className="relative w-5 h-5 rounded-full border-2 border-white shadow-lg"
-                        style={{ backgroundColor: a.color, opacity: a.opacity ?? 0.75 }}
-                      />
-                    </div>
-                  )
-                })}
               </div>
             ) : (
               <div className="flex items-center justify-center w-full h-24 bg-slate-100 rounded-lg border border-dashed border-slate-300">
@@ -154,18 +173,27 @@ export function StepCard({ step, index, projectTitle }: Props): React.ReactEleme
                     ref={textareaRef}
                     value={editText}
                     onChange={(e) => setEditText(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Escape') cancelEdit() }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault()
+                        cancelEdit()
+                      } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        e.preventDefault()
+                        commitEdit()
+                      }
+                    }}
                     rows={4}
                     className="w-full text-sm text-slate-700 bg-slate-50 border border-sky-300 rounded-lg p-3 resize-none outline-none focus:ring-2 focus:ring-sky-200"
                     placeholder="Describe this step…"
                   />
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex items-center gap-2 mt-2">
                     <button onClick={commitEdit} className="flex items-center gap-1.5 btn-primary py-1.5 px-3 text-xs">
                       <Check className="w-3 h-3" /> Save
                     </button>
                     <button onClick={cancelEdit} className="flex items-center gap-1.5 btn-secondary py-1.5 px-3 text-xs">
                       <X className="w-3 h-3" /> Cancel
                     </button>
+                    <span className="text-[10px] text-slate-400 ml-1">Ctrl+Enter to save · Esc to cancel</span>
                   </div>
                 </div>
               ) : (
@@ -181,7 +209,7 @@ export function StepCard({ step, index, projectTitle }: Props): React.ReactEleme
                       <div className="ai-shimmer h-3.5 rounded w-3/5" />
                     </div>
                   ) : step.description ? (
-                    <p className="text-sm text-slate-700 leading-relaxed">{step.description}</p>
+                    <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{step.description}</p>
                   ) : (
                     <p className="text-sm text-slate-400 italic">No description yet — click AI Descriptions or double-click to write manually</p>
                   )}

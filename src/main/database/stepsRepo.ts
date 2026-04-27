@@ -172,15 +172,19 @@ export const stepsRepo = {
     cropX: number
     cropY: number
     cropRadius: number
+    screenshotWidth?: number | null
+    screenshotHeight?: number | null
     annotations?: Annotation[]
   }): Step | null {
     getDb()
       .prepare(
         `UPDATE steps SET screenshot_path = ?, crop_x = ?, crop_y = ?, crop_radius = ?,
+         screenshot_width = ?, screenshot_height = ?,
          annotations = ?, updated_at = ? WHERE id = ?`
       )
       .run(
         patch.screenshotPath, patch.cropX, patch.cropY, patch.cropRadius,
+        patch.screenshotWidth ?? null, patch.screenshotHeight ?? null,
         JSON.stringify(patch.annotations ?? []), Date.now(), id
       )
     return this.get(id)
