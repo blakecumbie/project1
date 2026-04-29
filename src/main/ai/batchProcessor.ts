@@ -16,7 +16,10 @@ class AiBatchProcessor extends EventEmitter {
     this.cancelled.delete(projectId)
 
     const settings = await settingsRepo.get()
-    if (!settings.anthropicApiKey) {
+    // openai-compatible providers (Ollama, LM Studio, etc.) often run without
+    // a key — only require one for the cloud providers.
+    const requiresKey = settings.aiProvider !== 'openai-compatible'
+    if (requiresKey && !settings.aiApiKey) {
       this.running.delete(projectId)
       this.emit('error', { projectId, message: 'No API key configured' })
       return
@@ -56,8 +59,7 @@ class AiBatchProcessor extends EventEmitter {
           step,
           projectTitle,
           previousDescriptions,
-          settings.anthropicApiKey,
-          settings.aiModel
+          settings
         )
 
         stepsRepo.update(step.id, {
@@ -109,7 +111,7 @@ class AiBatchProcessor extends EventEmitter {
     if (!step) return
 
     const settings = await settingsRepo.get()
-    if (!settings.anthropicApiKey) return
+    if (settings.aiProvider !== 'openai-compatible' && !settings.aiApiKey) return
 
     stepsRepo.update(stepId, { aiStatus: 'processing' })
     this.emit('stepDone', { stepId, description: '', aiStatus: 'processing' })
@@ -120,7 +122,7 @@ class AiBatchProcessor extends EventEmitter {
       const idx = allSteps.findIndex((s) => s.id === stepId)
       const prevDescs = allSteps.slice(Math.max(0, idx - 3), idx).map((s) => s.description).filter(Boolean)
 
-      const description = await generateStepDescription(step, projectTitle, prevDescs, settings.anthropicApiKey, settings.aiModel)
+      const description = await generateStepDescription(step, projectTitle, prevDescs, settings)
       stepsRepo.update(stepId, { description, aiStatus: 'done' })
       this.emit('stepDone', { stepId, description, aiStatus: 'done' } satisfies AiStepDonePayload)
     } catch (err) {

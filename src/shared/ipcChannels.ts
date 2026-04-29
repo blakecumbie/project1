@@ -6,7 +6,9 @@ export const IPC = {
   RECORDING_RESUME: 'recording:resume',
   RECORDING_STATE_CHANGED: 'recording:stateChanged',
   RECORDING_STEP_CAPTURED: 'recording:stepCaptured',
+  RECORDING_TICK: 'recording:tick',
   RECORDING_ERROR: 'recording:error',
+  RECORDING_MINIMIZE_OVERLAY: 'recording:minimizeOverlay',
 
   // Projects
   PROJECTS_LIST: 'projects:list',

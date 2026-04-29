@@ -60,12 +60,15 @@ export const recording = {
   stop: () => invoke<{ projectId: string }>(IPC.RECORDING_STOP),
   pause: () => invoke<{ success: boolean }>(IPC.RECORDING_PAUSE),
   resume: () => invoke<{ success: boolean }>(IPC.RECORDING_RESUME),
+  minimizeOverlay: () => invoke<{ success: boolean }>(IPC.RECORDING_MINIMIZE_OVERLAY),
   getDisplays: () => invoke<DisplayInfo[]>(IPC.GET_DISPLAYS),
 
   onStateChanged: (cb: (p: RecordingStateChangedPayload) => void) =>
     window.api.on(IPC.RECORDING_STATE_CHANGED, cb as (...args: unknown[]) => void),
   onStepCaptured: (cb: (p: StepCapturedPayload) => void) =>
     window.api.on(IPC.RECORDING_STEP_CAPTURED, cb as (...args: unknown[]) => void),
+  onTick: (cb: (p: { elapsedMs: number; stepCount: number }) => void) =>
+    window.api.on(IPC.RECORDING_TICK, cb as (...args: unknown[]) => void),
   onError: (cb: (p: { message: string }) => void) =>
     window.api.on(IPC.RECORDING_ERROR, cb as (...args: unknown[]) => void)
 }

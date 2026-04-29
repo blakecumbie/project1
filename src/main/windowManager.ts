@@ -192,9 +192,11 @@ export function createOverlayWindow(): BrowserWindow {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    skipTaskbar: true,
+    // Show in the taskbar so a minimized overlay can be restored.
+    skipTaskbar: false,
     resizable: false,
     movable: true,
+    minimizable: true,
     show: false,
     webPreferences: {
       ...HARDENED_WEB_PREFERENCES,
@@ -235,6 +237,12 @@ export function showOverlay(): void {
 
 export function hideOverlay(): void {
   overlayWindow?.hide()
+}
+
+export function minimizeOverlay(): void {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.minimize()
+  }
 }
 
 export function hideMain(): void {

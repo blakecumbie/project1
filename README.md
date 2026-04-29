@@ -18,6 +18,29 @@ An AI-powered screen recording SOP (Standard Operating Procedure) document build
 - **Export** — PDF, HTML (self-contained), and Markdown formats
 - **Per-user install on Windows** — no admin privileges required
 
+## What's new in v2.2.1 (recording overlay fixes + multi-provider AI)
+
+- **Recording overlay** — the floating timer and step counter now actually
+  update during a recording session (the v2.2 release wasn't relaying the 1Hz
+  tick or per-step events to the overlay window). The overlay is also now
+  draggable from any non-button area and has a new minimize button so it
+  collapses to the taskbar instead of staying stuck on top.
+- **Anthropic API key works again** — v2.2 introduced a hard cert-pinning
+  requirement that bricked every Anthropic call when no `ANTHROPIC_PINS` env
+  was supplied. Pinning is now opt-in: TLS is still locked to ≥ 1.2 and
+  Chromium's chain validation runs as normal, but the connection isn't
+  refused when no pins are configured.
+- **Multi-provider AI** — pick your provider in Settings:
+  - **Anthropic** (Claude Haiku / Sonnet / Opus)
+  - **OpenAI** (GPT-4o / GPT-4o mini / GPT-4.1)
+  - **Google** (Gemini 2.0 / 2.5 Flash, 2.5 Pro)
+  - **Custom / Self-hosted (OpenAI-compatible)** — point at Ollama,
+    LM Studio, vLLM, OpenRouter, Groq, Together, etc. Local servers don't
+    need an API key.
+  Existing v2.2.0 users with an Anthropic key set via the old `Anthropic
+  API Key` field are migrated automatically on first launch — no re-entry
+  required.
+
 ## What's new in v2.2 (enterprise security hardening)
 
 This release re-engineers the app to enterprise security standards required
@@ -74,9 +97,9 @@ data. Full report and threat model in [`SECURITY.md`](SECURITY.md).
 - **Inline description editing** — `Ctrl+Enter` saves, `Esc` cancels, and the textarea no longer shows a stale value when an AI-generated description arrives after mount.
 - **Screenshot dimensions persisted** — fixes alignment of all SVG annotations against the actual image (was previously falling back to a 900×600 viewBox).
 
-## Upgrading from v1.x, v2.0, or v2.1
+## Upgrading from v1.x, v2.0, v2.1, or v2.2.0
 
-1. Download `releases/SOP-Builder-Setup-2.2.0.exe`
+1. Download `releases/SOP-Builder-Setup-2.2.1.exe`
 2. Run it — **no need to uninstall the previous version first.** It overwrites the app files in place.
 3. SmartScreen may warn again. Click **More info → Run anyway**.
 4. Your existing guides and settings are preserved automatically.
@@ -84,7 +107,7 @@ data. Full report and threat model in [`SECURITY.md`](SECURITY.md).
 
 ## Installation (Windows 11 — no admin required)
 
-**Latest installer:** [`releases/SOP-Builder-Setup-2.2.0.exe`](releases/SOP-Builder-Setup-2.2.0.exe)
+**Latest installer:** [`releases/SOP-Builder-Setup-2.2.1.exe`](releases/SOP-Builder-Setup-2.2.1.exe)
 
 1. Download the `.exe` (85 MB)
 2. Double-click to run — **no UAC prompt, no admin required**
