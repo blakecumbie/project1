@@ -18,6 +18,54 @@ An AI-powered screen recording SOP (Standard Operating Procedure) document build
 - **Export** — PDF, HTML (self-contained), and Markdown formats
 - **Per-user install on Windows** — no admin privileges required
 
+## What's new in v2.2 (enterprise security hardening)
+
+This release re-engineers the app to enterprise security standards required
+for deployment on restricted corporate networks handling confidential financial
+data. Full report and threat model in [`SECURITY.md`](SECURITY.md).
+
+- **Sandboxed renderers** — every `BrowserWindow` now runs with
+  `sandbox: true`, `contextIsolation: true`, `nodeIntegration: false`, and
+  hardened web preferences (`webSecurity`, no `experimentalFeatures`, no
+  spellcheck/webgl).
+- **Strict navigation control** — `will-navigate`, `will-redirect` and
+  `will-attach-webview` block off-origin destinations; `setWindowOpenHandler`
+  enforces an external-URL allow-list.
+- **Strict CSP via `onHeadersReceived`** — no `'unsafe-eval'` in production,
+  no `data:`/`blob:` images, plus COOP/CORP/COEP/Permissions-Policy.
+- **IPC payload validation** — every `ipcMain` channel is wrapped with a Zod
+  schema; malformed or oversized payloads are rejected before reaching repos
+  or the filesystem.
+- **Local PII / PCI redaction** — every screenshot is OCR'd in-memory by a
+  sandboxed Tesseract.js (WASM) worker; Luhn-validated card numbers, SSNs,
+  ABA/IBAN account numbers and financial-table headings are blacked out
+  before the bytes are ever written to disk or sent to the LLM.
+- **AES-256-GCM at rest + OS key vault** — a 32-byte master key is generated
+  and stored in the OS credential manager via `keytar` (Windows Credential
+  Manager / macOS Keychain / Linux Secret Service). The Anthropic API key is
+  ciphertext-only in SQLite, with auto-migration from any pre-2.2 plaintext
+  value.
+- **Ephemeral state** — `SecureBuffer` / `SecureString` zero memory on
+  dispose; raw screenshots and keystroke buffers are wiped immediately after
+  use; `app.will-quit` drains every live secure buffer.
+- **TLS 1.3 + cert pinning** — outbound HTTPS forces TLS 1.3 minimum and
+  maximum (downgrade-blocked); SubjectPublicKeyInfo SHA-256 pinning for
+  `api.anthropic.com` (configurable via `ANTHROPIC_PINS`); zero-data-retention
+  header set on every Anthropic request.
+- **Path-traversal-safe `sopimg://` protocol** — resolved paths are bounded
+  to `userData/images`; `..`, NUL bytes, and absolute prefixes are rejected.
+- **Supply-chain release gate** — `npm run sbom` (CycloneDX 1.5) and
+  `npm run audit:ci` (fails on any High/Critical CVE in production deps).
+
+### Breaking changes
+
+- The `ANTHROPIC_API_KEY` env-only path is removed; the key is held in the
+  OS vault. Existing plaintext SQLite entries are migrated transparently on
+  first launch.
+- `OPEN_EXTERNAL` only opens an allow-listed set of HTTPS hosts.
+- `electron-builder` now unpacks `keytar` and `tesseract.js` from the asar
+  archive — rebuild your installer with `npm run package:win` to pick this up.
+
 ## What's new in v2.1 (bug fixes)
 
 - **Steps land in chronological order** — events are now processed through a serial queue, so a slow screen capture for one event no longer lets the next event's step jump ahead.
@@ -26,9 +74,9 @@ An AI-powered screen recording SOP (Standard Operating Procedure) document build
 - **Inline description editing** — `Ctrl+Enter` saves, `Esc` cancels, and the textarea no longer shows a stale value when an AI-generated description arrives after mount.
 - **Screenshot dimensions persisted** — fixes alignment of all SVG annotations against the actual image (was previously falling back to a 900×600 viewBox).
 
-## Upgrading from v1.x or v2.0
+## Upgrading from v1.x, v2.0, or v2.1
 
-1. Download `releases/SOP-Builder-Setup-2.1.0.exe`
+1. Download `releases/SOP-Builder-Setup-2.2.0.exe`
 2. Run it — **no need to uninstall the previous version first.** It overwrites the app files in place.
 3. SmartScreen may warn again. Click **More info → Run anyway**.
 4. Your existing guides and settings are preserved automatically.
@@ -36,7 +84,7 @@ An AI-powered screen recording SOP (Standard Operating Procedure) document build
 
 ## Installation (Windows 11 — no admin required)
 
-**Latest installer:** [`releases/SOP-Builder-Setup-2.1.0.exe`](releases/SOP-Builder-Setup-2.1.0.exe)
+**Latest installer:** [`releases/SOP-Builder-Setup-2.2.0.exe`](releases/SOP-Builder-Setup-2.2.0.exe)
 
 1. Download the `.exe` (85 MB)
 2. Double-click to run — **no UAC prompt, no admin required**

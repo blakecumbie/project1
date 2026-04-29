@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron'
+import { dialog } from 'electron'
 import { IPC } from '@shared/ipcChannels'
 import { exportPdf } from '../export/exportPdf'
 import { exportHtml } from '../export/exportHtml'
@@ -7,12 +7,10 @@ import { projectsRepo } from '../database/projectsRepo'
 import { stepsRepo } from '../database/stepsRepo'
 import { sendToMain } from '../windowManager'
 import { logger } from '../utils/logger'
-import type { ExportPayload } from '@shared/types'
-import { join } from 'path'
-import { mkdirSync } from 'fs'
+import { validatedHandle } from '../security/ipcValidation'
 
 export function registerExportHandlers(): void {
-  ipcMain.handle(IPC.EXPORT_PDF, async (_, payload: ExportPayload) => {
+  validatedHandle(IPC.EXPORT_PDF, 'exportPayload', async (_event, payload) => {
     try {
       const project = projectsRepo.get(payload.projectId)
       if (!project) return { error: 'Project not found' }
@@ -27,34 +25,44 @@ export function registerExportHandlers(): void {
     }
   })
 
-  ipcMain.handle(IPC.EXPORT_HTML, async (_, payload: ExportPayload) => {
+  validatedHandle(IPC.EXPORT_HTML, 'exportPayload', async (_event, payload) => {
     try {
       const project = projectsRepo.get(payload.projectId)
       if (!project) return { error: 'Project not found' }
       const steps = stepsRepo.listForProject(payload.projectId)
       exportHtml(project, steps, payload.outputPath)
       return { data: { outputPath: payload.outputPath } }
-    } catch (err) { return { error: String(err) } }
+    } catch (err) {
+      return { error: String(err) }
+    }
   })
 
-  ipcMain.handle(IPC.EXPORT_MARKDOWN, async (_, payload: ExportPayload) => {
+  validatedHandle(IPC.EXPORT_MARKDOWN, 'exportPayload', async (_event, payload) => {
     try {
       const project = projectsRepo.get(payload.projectId)
       if (!project) return { error: 'Project not found' }
       const steps = stepsRepo.listForProject(payload.projectId)
       exportMarkdown(project, steps, payload.outputPath)
       return { data: { outputPath: payload.outputPath } }
-    } catch (err) { return { error: String(err) } }
+    } catch (err) {
+      return { error: String(err) }
+    }
   })
 
-  ipcMain.handle(IPC.SHOW_SAVE_DIALOG, async (_, opts: { title: string; defaultPath: string; filters: Electron.FileFilter[] }) => {
+  validatedHandle(IPC.SHOW_SAVE_DIALOG, 'showSaveDialog', async (_event, opts) => {
     try {
-      const result = await dialog.showSaveDialog({ title: opts.title, defaultPath: opts.defaultPath, filters: opts.filters })
+      const result = await dialog.showSaveDialog({
+        title: opts.title,
+        defaultPath: opts.defaultPath,
+        filters: opts.filters as Electron.FileFilter[]
+      })
       return { data: result }
-    } catch (err) { return { error: String(err) } }
+    } catch (err) {
+      return { error: String(err) }
+    }
   })
 
-  ipcMain.handle(IPC.OPEN_ITEM, async (_, path: string) => {
+  validatedHandle(IPC.OPEN_ITEM, 'openItem', async (_event, path) => {
     const { shell } = await import('electron')
     shell.showItemInFolder(path)
     return { data: { success: true } }

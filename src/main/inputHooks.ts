@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events'
 import type { ActionType } from '@shared/types'
 import { MAX_TYPED_TEXT_LENGTH } from '@shared/constants'
+import { SecureString } from './security/memoryGuard'
 
 export interface CapturedEvent {
   type: ActionType
@@ -17,7 +18,9 @@ class InputHookManager extends EventEmitter {
   private active = false
   private captureTyping = true
   private captureScrolling = true
-  private keyBuffer = ''
+  // Captured keystrokes are held in a wipeable TypedArray instead of a JS
+  // string so that we can predictably zero the memory on flush / stop.
+  private keyBuffer: SecureString = new SecureString(MAX_TYPED_TEXT_LENGTH)
   private lastMouseX = 0
   private lastMouseY = 0
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -27,7 +30,8 @@ class InputHookManager extends EventEmitter {
     if (this.active) return
     this.captureTyping = opts.captureTyping
     this.captureScrolling = opts.captureScrolling
-    this.keyBuffer = ''
+    this.keyBuffer.clear()
+    this.keyBuffer = new SecureString(MAX_TYPED_TEXT_LENGTH)
 
     try {
       // Dynamic import — gracefully degrade if native module isn't available
@@ -98,7 +102,7 @@ class InputHookManager extends EventEmitter {
           }
 
           if (keyName === 'Backspace') {
-            if (this.keyBuffer.length > 0) this.keyBuffer = this.keyBuffer.slice(0, -1)
+            this.keyBuffer.popLast()
             return
           }
 
@@ -106,7 +110,7 @@ class InputHookManager extends EventEmitter {
           if (e.keycode && !e.ctrlKey && !e.altKey && !e.metaKey) {
             const char = keyCodeToChar(e.keycode, e.shiftKey)
             if (char) {
-              this.keyBuffer += char
+              this.keyBuffer.push(char)
               if (this.keyBuffer.length >= MAX_TYPED_TEXT_LENGTH) this.flushKeyBuffer()
             }
           }
@@ -127,25 +131,27 @@ class InputHookManager extends EventEmitter {
       this.uiohook?.stop()
       this.uiohook?.removeAllListeners()
     } catch {}
+    this.keyBuffer.clear()
     this.active = false
   }
 
   private flushKeyBuffer(): void {
-    if (this.keyBuffer.trim().length === 0) {
-      this.keyBuffer = ''
-      return
-    }
+    if (this.keyBuffer.isEmpty()) return
+    // Reveal once, immediately consume in the emit, then wipe the storage.
+    const text = this.keyBuffer.reveal(MAX_TYPED_TEXT_LENGTH)
+    this.keyBuffer.clear()
+    this.keyBuffer = new SecureString(MAX_TYPED_TEXT_LENGTH)
+    if (text.trim().length === 0) return
     this.emit('event', {
       type: 'type',
       x: this.lastMouseX,
       y: this.lastMouseY,
       scrollDeltaX: null,
       scrollDeltaY: null,
-      typedText: this.keyBuffer.slice(0, MAX_TYPED_TEXT_LENGTH),
+      typedText: text,
       keyName: null,
       timestamp: Date.now()
     } satisfies CapturedEvent)
-    this.keyBuffer = ''
   }
 }
 

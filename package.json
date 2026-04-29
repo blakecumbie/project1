@@ -1,6 +1,6 @@
 {
   "name": "sop-builder",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "AI-powered screen recording SOP document builder",
   "main": "./out/main/index.js",
   "scripts": {
@@ -9,7 +9,11 @@
     "preview": "electron-vite preview",
     "package": "npm run build && electron-builder",
     "package:win": "npm run build && electron-builder --win",
-    "postinstall": "electron-builder install-app-deps"
+    "postinstall": "electron-builder install-app-deps",
+    "test": "node --test --experimental-vm-modules tests/",
+    "audit:ci": "node scripts/security-audit.js",
+    "sbom": "node scripts/generate-sbom.js",
+    "security:full": "npm run sbom && npm run audit:ci"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
@@ -18,9 +22,13 @@
     "better-sqlite3": "^9.4.3",
     "date-fns": "^3.3.1",
     "electron-store": "^8.2.0",
+    "jimp": "^0.22.12",
+    "keytar": "^7.9.0",
     "pdf-lib": "^1.17.1",
+    "tesseract.js": "^5.0.4",
     "uiohook-napi": "^1.5.0",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@dnd-kit/core": "^6.1.0",
@@ -60,7 +68,8 @@
     "typescript": "^5.3.3",
     "vite": "^5.4.21",
     "zustand": "^4.5.2",
-    "@dnd-kit/modifiers": "^9.0.0"
+    "@dnd-kit/modifiers": "^9.0.0",
+    "@cyclonedx/cyclonedx-npm": "^1.19.3"
   },
   "build": {
     "appId": "com.sopbuilder.app",
@@ -74,7 +83,10 @@
     ],
     "asarUnpack": [
       "**/node_modules/uiohook-napi/**",
-      "**/node_modules/better-sqlite3/**"
+      "**/node_modules/better-sqlite3/**",
+      "**/node_modules/keytar/**",
+      "**/node_modules/tesseract.js/**",
+      "**/node_modules/tesseract.js-core/**"
     ],
     "win": {
       "target": [
