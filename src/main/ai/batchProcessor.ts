@@ -15,7 +15,7 @@ class AiBatchProcessor extends EventEmitter {
     this.running.add(projectId)
     this.cancelled.delete(projectId)
 
-    const settings = settingsRepo.get()
+    const settings = await settingsRepo.get()
     if (!settings.anthropicApiKey) {
       this.running.delete(projectId)
       this.emit('error', { projectId, message: 'No API key configured' })
@@ -108,7 +108,7 @@ class AiBatchProcessor extends EventEmitter {
     const step = stepsRepo.get(stepId)
     if (!step) return
 
-    const settings = settingsRepo.get()
+    const settings = await settingsRepo.get()
     if (!settings.anthropicApiKey) return
 
     stepsRepo.update(stepId, { aiStatus: 'processing' })

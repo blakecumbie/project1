@@ -1,6 +1,20 @@
 import { app } from 'electron'
 import { mkdirSync, existsSync, writeFileSync, unlinkSync } from 'fs'
-import { join, dirname } from 'path'
+import { join, dirname, resolve, normalize, isAbsolute, sep } from 'path'
+
+/**
+ * Bound a relative path to the userData/images directory. Returns null on any
+ * traversal attempt (`..`, NUL, absolute prefix). Used by every callsite that
+ * accepts a path from the renderer or DB to defeat directory escapes.
+ */
+function bounded(base: string, relative: string): string | null {
+  if (!relative || relative.includes('\0') || isAbsolute(relative)) return null
+  const norm = normalize(relative)
+  if (norm.startsWith('..') || norm.includes(`..${sep}`) || norm.includes(`${sep}..`)) return null
+  const full = resolve(base, norm)
+  if (!full.startsWith(base + sep) && full !== base) return null
+  return full
+}
 
 export function getImagesDir(projectId?: string): string {
   const base = join(app.getPath('userData'), 'images')
@@ -20,19 +34,23 @@ export function getRelativeImagePath(projectId: string, stepId: string): string 
 export function saveImageBuffer(projectId: string, stepId: string, buffer: Buffer): string {
   const dir = getImagesDir(projectId)
   const filePath = join(dir, `${stepId}.jpg`)
-  writeFileSync(filePath, buffer)
+  writeFileSync(filePath, buffer, { mode: 0o600 })
   return filePath
 }
 
 export function deleteImageFile(relativePath: string): void {
   try {
-    const full = join(app.getPath('userData'), 'images', relativePath)
-    if (existsSync(full)) unlinkSync(full)
+    const base = resolve(app.getPath('userData'), 'images')
+    const full = bounded(base, relativePath)
+    if (full && existsSync(full)) unlinkSync(full)
   } catch {}
 }
 
 export function resolveImagePath(relativePath: string): string {
-  return join(app.getPath('userData'), 'images', relativePath)
+  const base = resolve(app.getPath('userData'), 'images')
+  const full = bounded(base, relativePath)
+  if (!full) throw new Error('resolveImagePath: unsafe path')
+  return full
 }
 
 export function getExportsDir(): string {

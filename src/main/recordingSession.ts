@@ -8,6 +8,7 @@ import { saveImageBuffer, saveFullImageBuffer, getRelativeImagePath, getRelative
 import { logger } from './utils/logger'
 import { DEFAULT_CROP_RADIUS, DEFAULT_SCREENSHOT_DELAY_MS } from '@shared/constants'
 import type { Annotation } from '@shared/types'
+import { redactSensitive } from './security/redaction'
 
 export class RecordingSession extends EventEmitter {
   private _state: RecordingState = 'idle'
@@ -144,7 +145,26 @@ export class RecordingSession extends EventEmitter {
       })
 
       if (result) {
-        const dims = getJpegDimensions(result.croppedBuffer)
+        // ── PII / PCI redaction (in-memory) ──────────────────────────────
+        // Both the cropped and full screenshots are passed through the
+        // local OCR + redaction pipeline BEFORE they are persisted to disk
+        // or sent to the LLM. The originals are zeroed by `redactSensitive`.
+        let redactedCropped: Buffer
+        let redactedFull: Buffer
+        try {
+          const cropResult = await redactSensitive(result.croppedBuffer)
+          redactedCropped = cropResult.buffer
+          const fullResult = await redactSensitive(result.fullBuffer)
+          redactedFull = fullResult.buffer
+        } catch (err) {
+          logger.error(`Redaction failed; dropping step: ${String(err)}`)
+          // Fail-closed: do not persist anything we couldn't redact.
+          result.croppedBuffer.fill(0)
+          result.fullBuffer.fill(0)
+          return
+        }
+
+        const dims = getJpegDimensions(redactedCropped)
         const screenshotWidth = dims?.width ?? null
         const screenshotHeight = dims?.height ?? null
 
@@ -168,8 +188,12 @@ export class RecordingSession extends EventEmitter {
           capturedAt: event.timestamp
         })
 
-        saveImageBuffer(this.projectId, step.id, result.croppedBuffer)
-        saveFullImageBuffer(this.projectId, step.id, result.fullBuffer)
+        saveImageBuffer(this.projectId, step.id, redactedCropped)
+        saveFullImageBuffer(this.projectId, step.id, redactedFull)
+        // Zero the buffers we just persisted — the bytes have been written
+        // to disk; we no longer need them in RAM.
+        redactedCropped.fill(0)
+        redactedFull.fill(0)
 
         const realPath = getRelativeImagePath(this.projectId, step.id)
         const realFullPath = getRelativeFullImagePath(this.projectId, step.id)

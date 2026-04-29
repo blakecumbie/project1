@@ -1,25 +1,28 @@
-import { ipcMain, shell } from 'electron'
 import { IPC } from '@shared/ipcChannels'
 import { settingsRepo } from '../database/settingsRepo'
-import type { AppSettings } from '@shared/types'
+import { openExternalAllowlisted } from '../windowManager'
+import { validatedHandle } from '../security/ipcValidation'
 
 export function registerSettingsHandlers(): void {
-  ipcMain.handle(IPC.SETTINGS_GET, () => {
-    try { return { data: settingsRepo.get() } }
-    catch (err) { return { error: String(err) } }
-  })
-
-  ipcMain.handle(IPC.SETTINGS_SET, (_, patch: Partial<AppSettings>) => {
+  validatedHandle(IPC.SETTINGS_GET, 'settingsGet', async () => {
     try {
-      settingsRepo.set(patch)
-      return { data: settingsRepo.get() }
-    } catch (err) { return { error: String(err) } }
+      return { data: await settingsRepo.get() }
+    } catch (err) {
+      return { error: String(err) }
+    }
   })
 
-  ipcMain.handle(IPC.OPEN_EXTERNAL, async (_, url: string) => {
-    if (url.startsWith('https://') || url.startsWith('http://')) {
-      await shell.openExternal(url)
+  validatedHandle(IPC.SETTINGS_SET, 'settingsSet', async (_event, patch) => {
+    try {
+      await settingsRepo.set(patch)
+      return { data: await settingsRepo.get() }
+    } catch (err) {
+      return { error: String(err) }
     }
-    return { data: { success: true } }
+  })
+
+  validatedHandle(IPC.OPEN_EXTERNAL, 'openExternal', async (_event, url) => {
+    const ok = openExternalAllowlisted(url)
+    return ok ? { data: { success: true } } : { error: 'url_not_allowed' }
   })
 }
