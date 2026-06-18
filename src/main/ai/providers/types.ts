@@ -14,7 +14,7 @@ export interface GenerationRequest {
   previousDescriptions: string[]
   /** Provider-specific model identifier. */
   model: string
-  /** PNG/JPEG bytes of the screenshot, already redacted, or null if missing. */
+  /** PNG/JPEG bytes of the screenshot, or null if missing. */
   imageBytes: Buffer | null
   /** MIME type of the image (always 'image/jpeg' for our pipeline today). */
   imageMimeType: 'image/jpeg' | 'image/png'

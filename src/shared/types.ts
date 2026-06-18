@@ -115,7 +115,13 @@ export interface AppSettings {
 
 export interface StartRecordingPayload {
   projectId: string
-  displayId?: string
+  /**
+   * Displays to capture, identified by `DisplayInfo.id`. Multiple screens are
+   * recorded simultaneously — whichever selected screen an action lands on is
+   * the one captured. An empty array or `undefined` captures all connected
+   * displays.
+   */
+  displayIds?: string[]
   captureMouseClicks: boolean
   captureTyping: boolean
   captureScrolling: boolean

@@ -18,6 +18,28 @@ An AI-powered screen recording SOP (Standard Operating Procedure) document build
 - **Export** — PDF, HTML (self-contained), and Markdown formats
 - **Per-user install on Windows** — no admin privileges required
 
+## What's new in v2.2.2 (multi-screen recording + overlay fixes)
+
+- **Record multiple screens simultaneously** — the Start Recording dialog now
+  lets you tick one or more connected displays (all are selected by default).
+  Each captured action is screenshotted on whichever selected screen it happens
+  on. Under the hood, the global click position is now mapped to the correct
+  monitor and translated into that display's local space before cropping —
+  which also fixes screenshots on secondary monitors being cropped from the
+  wrong spot.
+- **Working Pause & Stop on the recording control** — the floating control's
+  buttons were nested inside the window's drag region, which on a frameless,
+  transparent window swallowed their clicks. The drag region is now limited to
+  the status area, so the buttons respond reliably.
+- **Cleaner recording control** — removed the white box that appeared around the
+  floating pill (the shared app background was painting behind the transparent
+  window) and removed the live step counter. A small "Paused" label now shows
+  when recording is paused.
+- **Removed automatic on-screen redaction** — the OCR pipeline that blacked out
+  detected card numbers / SSNs / financial text on every screenshot has been
+  removed. Screenshots are now stored exactly as captured. (You can still draw
+  manual redaction boxes in the screenshot editor.)
+
 ## What's new in v2.2.1 (recording overlay fixes + multi-provider AI)
 
 - **Recording overlay** — the floating timer and step counter now actually
@@ -59,10 +81,6 @@ data. Full report and threat model in [`SECURITY.md`](SECURITY.md).
 - **IPC payload validation** — every `ipcMain` channel is wrapped with a Zod
   schema; malformed or oversized payloads are rejected before reaching repos
   or the filesystem.
-- **Local PII / PCI redaction** — every screenshot is OCR'd in-memory by a
-  sandboxed Tesseract.js (WASM) worker; Luhn-validated card numbers, SSNs,
-  ABA/IBAN account numbers and financial-table headings are blacked out
-  before the bytes are ever written to disk or sent to the LLM.
 - **AES-256-GCM at rest + OS key vault** — a 32-byte master key is generated
   and stored in the OS credential manager via `keytar` (Windows Credential
   Manager / macOS Keychain / Linux Secret Service). The Anthropic API key is
@@ -86,8 +104,8 @@ data. Full report and threat model in [`SECURITY.md`](SECURITY.md).
   OS vault. Existing plaintext SQLite entries are migrated transparently on
   first launch.
 - `OPEN_EXTERNAL` only opens an allow-listed set of HTTPS hosts.
-- `electron-builder` now unpacks `keytar` and `tesseract.js` from the asar
-  archive — rebuild your installer with `npm run package:win` to pick this up.
+- `electron-builder` now unpacks `keytar` from the asar archive — rebuild your
+  installer with `npm run package:win` to pick this up.
 
 ## What's new in v2.1 (bug fixes)
 

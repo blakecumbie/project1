@@ -31,6 +31,13 @@
   /* Allow text selection in inputs and text areas */
   input, textarea, [contenteditable] { user-select: text; }
 
+  /* The recording overlay window is frameless + transparent. Suppress the
+     app's body background here so only the rounded pill paints — no white box. */
+  html.overlay-window,
+  html.overlay-window body {
+    background: transparent !important;
+  }
+
   /* Scrollbar styling */
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }

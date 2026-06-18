@@ -115,7 +115,8 @@ export const Schemas = {
   recordingStart: z.tuple([
     z.object({
       projectId: Uuid,
-      displayId: BoundedString(64).optional(),
+      // Up to 16 displays may be selected for simultaneous capture.
+      displayIds: z.array(BoundedString(64)).max(16).optional(),
       captureMouseClicks: z.boolean(),
       captureTyping: z.boolean(),
       captureScrolling: z.boolean(),

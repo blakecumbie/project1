@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Video, Monitor, X, ChevronDown } from 'lucide-react'
+import { Video, Monitor, X } from 'lucide-react'
 import { recording as recordingApi } from '@/lib/ipc'
 import { useProjectStore } from '@/store/projectStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -12,7 +12,7 @@ interface Props {
 
 export function RecordingSetup({ projectId, onClose }: Props): React.ReactElement {
   const [displays, setDisplays] = useState<DisplayInfo[]>([])
-  const [selectedDisplay, setSelectedDisplay] = useState<string>('')
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [captureTyping, setCaptureTyping] = useState(true)
   const [captureScrolling, setCaptureScrolling] = useState(true)
   const { settings } = useSettingsStore()
@@ -21,18 +21,23 @@ export function RecordingSetup({ projectId, onClose }: Props): React.ReactElemen
     recordingApi.getDisplays().then((res) => {
       if (res.data) {
         setDisplays(res.data)
-        const primary = res.data.find((d) => d.isPrimary)
-        if (primary) setSelectedDisplay(primary.id)
+        // Default to recording every connected screen.
+        setSelectedIds(res.data.map((d) => d.id))
       }
     })
     setCaptureTyping(settings.captureTyping)
     setCaptureScrolling(settings.captureScrolling)
   }, [settings])
 
+  const toggleDisplay = (id: string): void => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+  }
+
   const handleStart = async () => {
     const res = await recordingApi.start({
       projectId,
-      displayId: selectedDisplay || undefined,
+      // Empty selection falls back to all displays (handled in the main process).
+      displayIds: selectedIds.length > 0 ? selectedIds : undefined,
       captureMouseClicks: true,
       captureTyping,
       captureScrolling,
@@ -65,25 +70,43 @@ export function RecordingSetup({ projectId, onClose }: Props): React.ReactElemen
 
         {/* Body */}
         <div className="p-5 space-y-5">
-          {/* Display selector */}
+          {/* Display selector — multiple screens record simultaneously */}
           {displays.length > 1 && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1.5">
+              <label className="block text-sm font-medium text-slate-700 mb-1">
                 <Monitor className="w-4 h-4 inline mr-1.5" />
-                Screen to capture
+                Screens to capture
               </label>
-              <div className="relative">
-                <select
-                  value={selectedDisplay}
-                  onChange={(e) => setSelectedDisplay(e.target.value)}
-                  className="w-full appearance-none bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 pr-8"
-                >
-                  {displays.map((d) => (
-                    <option key={d.id} value={d.id}>{d.label}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-2.5 top-2.5 w-4 h-4 text-slate-400 pointer-events-none" />
+              <p className="text-xs text-slate-500 mb-2">
+                Select one or more screens — they're recorded at the same time, and each
+                action is captured on whichever screen it happens.
+              </p>
+              <div className="space-y-1.5">
+                {displays.map((d) => {
+                  const checked = selectedIds.includes(d.id)
+                  return (
+                    <label
+                      key={d.id}
+                      className={`flex items-center gap-2.5 p-2 rounded-lg border cursor-pointer transition-colors ${
+                        checked ? 'border-sky-300 bg-sky-50' : 'border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleDisplay(d.id)}
+                        className="w-4 h-4 accent-sky-500"
+                      />
+                      <span className="text-sm text-slate-700">{d.label}</span>
+                    </label>
+                  )
+                })}
               </div>
+              {selectedIds.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1.5">
+                  No screens selected — all screens will be recorded.
+                </p>
+              )}
             </div>
           )}
 

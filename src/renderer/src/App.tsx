@@ -20,6 +20,17 @@ export function App(): React.ReactElement {
   // Determine if this window is the overlay
   const isOverlay = window.location.hash === '#/overlay'
 
+  // The overlay is a frameless, transparent window. The shared <body> paints
+  // the app's slate background, which otherwise shows as an opaque box around
+  // the floating pill. Mark this window so its body can be made transparent.
+  useEffect(() => {
+    if (isOverlay) {
+      document.documentElement.classList.add('overlay-window')
+      return () => document.documentElement.classList.remove('overlay-window')
+    }
+    return undefined
+  }, [isOverlay])
+
   if (isOverlay) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-transparent">

@@ -6,31 +6,22 @@ import { formatDuration } from '@/lib/utils'
 import type { RecordingStateChangedPayload } from '../../../../shared/types'
 
 export function RecordingOverlay(): React.ReactElement {
-  const { state, elapsedMs, stepCount, setState, setElapsedMs, setStepCount } = useRecordingStore()
+  const { state, elapsedMs, setState, setElapsedMs } = useRecordingStore()
 
   useEffect(() => {
     const unsubState = recordingApi.onStateChanged((p: RecordingStateChangedPayload) => {
       setState(p.state)
       setElapsedMs(p.elapsedMs)
-      setStepCount(p.stepCount)
     })
-    // 1Hz tick from the main process — the only thing that drives the
-    // stopwatch between state transitions.
-    const unsubTick = recordingApi.onTick(({ elapsedMs: ms, stepCount: n }) => {
+    // 1Hz tick from the main process — drives the stopwatch between transitions.
+    const unsubTick = recordingApi.onTick(({ elapsedMs: ms }) => {
       setElapsedMs(ms)
-      setStepCount(n)
-    })
-    // Per-step bumps so the counter updates the instant a step is captured,
-    // without waiting for the next 1Hz tick.
-    const unsubStep = recordingApi.onStepCaptured(() => {
-      setStepCount(useRecordingStore.getState().stepCount + 1)
     })
     return () => {
       unsubState()
       unsubTick()
-      unsubStep()
     }
-  }, [setState, setElapsedMs, setStepCount])
+  }, [setState, setElapsedMs])
 
   const handleStop = (): void => void recordingApi.stop()
   const handleMinimize = (): void => void recordingApi.minimizeOverlay()
@@ -40,23 +31,26 @@ export function RecordingOverlay(): React.ReactElement {
   }
 
   return (
-    // The outer wrapper is the drag region — clicking and holding anywhere on
-    // the dark pill (except on a button) lets the user drag the overlay.
-    // `app-region: drag` is Chromium's mechanism for moving frameless windows.
-    <div
-      className="flex items-center gap-2 bg-gray-900/95 backdrop-blur rounded-2xl px-4 py-3 h-full shadow-2xl border border-white/10 select-none"
-      style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-    >
-      {/* Red dot */}
-      <Circle className={`w-3 h-3 fill-red-500 text-red-500 flex-shrink-0 ${state === 'recording' ? 'record-dot' : ''}`} />
-
-      {/* Timer + steps */}
-      <div className="flex flex-col min-w-0">
+    <div className="flex items-center gap-2 bg-gray-900/95 backdrop-blur rounded-2xl px-3 py-3 h-full shadow-2xl border border-white/10 select-none">
+      {/*
+        Only this status area is the drag region. The control buttons are kept
+        OUTSIDE any `-webkit-app-region: drag` element — on a frameless,
+        transparent window a drag region that *wraps* its buttons swallows their
+        mouse events, which is why Pause/Stop appeared dead. Buttons that are
+        siblings of (not descendants of) the drag region click normally.
+      */}
+      <div
+        className="flex items-center gap-2 flex-1 min-w-0 pl-1 cursor-move"
+        style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+      >
+        <Circle
+          className={`w-3 h-3 fill-red-500 text-red-500 flex-shrink-0 ${state === 'recording' ? 'record-dot' : ''}`}
+        />
         <span className="text-white text-sm font-mono font-semibold">{formatDuration(elapsedMs)}</span>
-        <span className="text-gray-400 text-xs">{stepCount} step{stepCount !== 1 ? 's' : ''}</span>
+        {state === 'paused' && <span className="text-amber-300 text-xs font-medium">Paused</span>}
       </div>
 
-      {/* Pause/Resume — buttons opt out of the drag region so clicks register. */}
+      {/* Pause / Resume */}
       <button
         onClick={handleTogglePause}
         style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
