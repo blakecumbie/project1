@@ -1,6 +1,6 @@
 {
   "name": "sop-builder",
-  "version": "2.2.2",
+  "version": "2.2.3",
   "description": "AI-powered screen recording SOP document builder",
   "main": "./out/main/index.js",
   "scripts": {

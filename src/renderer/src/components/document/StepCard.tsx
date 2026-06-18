@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Trash2, GripVertical, Loader2, Sparkles, Edit2, Check, X, PencilLine } from 'lucide-react'
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { cn, actionTypeLabel, imgSrc } from '@/lib/utils'
+import { cn, imgSrc } from '@/lib/utils'
 import { useProjectStore } from '@/store/projectStore'
 import { ai as aiApi } from '@/lib/ipc'
 import { ScreenshotEditor } from './ScreenshotEditor'
@@ -77,9 +77,6 @@ export function StepCard({ step, index, projectTitle }: Props): React.ReactEleme
           <div className="w-7 h-7 rounded-full bg-sky-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             {index + 1}
           </div>
-          <span className="text-[10px] font-medium text-slate-400 text-center leading-tight bg-white border border-slate-100 rounded px-1 py-0.5">
-            {actionTypeLabel(step.actionType)}
-          </span>
         </div>
 
         {/* Main content */}
