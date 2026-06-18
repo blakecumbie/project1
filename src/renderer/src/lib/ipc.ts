@@ -14,7 +14,8 @@ import type {
   IpcResult,
   DisplayInfo,
   ExportPayload,
-  UpdateCropPayload
+  UpdateCropPayload,
+  VoiceTranscriptionProgress
 } from '../../../shared/types'
 
 declare global {
@@ -102,4 +103,14 @@ export const exportApi = {
 export const settingsApi = {
   get: () => invoke<AppSettings>(IPC.SETTINGS_GET),
   set: (patch: Partial<AppSettings>) => invoke<AppSettings>(IPC.SETTINGS_SET, patch)
+}
+
+// ── Audio / Voice ─────────────────────────────────────────────────────────────
+export const audioApi = {
+  check: (projectId: string) => invoke<{ exists: boolean }>(IPC.AUDIO_CHECK, projectId),
+  transcribe: (projectId: string) => invoke<{ ok: boolean }>(IPC.AI_TRANSCRIBE, projectId),
+  onTranscriptionProgress: (cb: (p: VoiceTranscriptionProgress) => void) =>
+    window.api.on(IPC.AI_TRANSCRIPTION_PROGRESS, cb as (...args: unknown[]) => void),
+  onMuteState: (cb: (p: { muted: boolean }) => void) =>
+    window.api.on(IPC.AUDIO_MUTE_STATE, cb as (...args: unknown[]) => void)
 }

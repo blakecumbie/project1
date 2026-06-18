@@ -278,6 +278,40 @@ export function SettingsPage(): React.ReactElement {
           </datalist>
         </div>
 
+        {/* Voice Transcription */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h2 className="font-semibold text-slate-800 mb-1">Voice Transcription</h2>
+          <p className="text-sm text-slate-500 mb-4">
+            OpenAI Whisper API is used to transcribe voice recordings. Leave the key blank to reuse
+            your main API key (only works when the provider above is OpenAI).
+          </p>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Whisper API Key (optional)</label>
+              <input
+                type="password"
+                value={settings.transcriptionApiKey ?? ''}
+                onChange={(e) => updateSettings({ transcriptionApiKey: e.target.value })}
+                placeholder="sk-… (leave blank to reuse main AI key)"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Transcription Base URL (optional)</label>
+              <input
+                type="text"
+                value={settings.transcriptionBaseUrl ?? ''}
+                onChange={(e) => updateSettings({ transcriptionBaseUrl: e.target.value })}
+                placeholder="https://api.openai.com/v1"
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100 font-mono"
+              />
+              <p className="text-xs text-slate-500 mt-1">
+                Use Groq, Deepgram, or any Whisper-compatible endpoint. Leave blank for OpenAI.
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Recording */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h2 className="font-semibold text-slate-800 mb-4">Recording Defaults</h2>

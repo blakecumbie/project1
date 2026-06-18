@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Video, Monitor, X } from 'lucide-react'
+import { Video, Monitor, Mic, X } from 'lucide-react'
 import { recording as recordingApi } from '@/lib/ipc'
 import { useProjectStore } from '@/store/projectStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -8,13 +8,15 @@ import type { DisplayInfo } from '../../../../shared/types'
 interface Props {
   projectId: string
   onClose: () => void
+  onStarted?: (captureVoice: boolean, startedAt: number) => void
 }
 
-export function RecordingSetup({ projectId, onClose }: Props): React.ReactElement {
+export function RecordingSetup({ projectId, onClose, onStarted }: Props): React.ReactElement {
   const [displays, setDisplays] = useState<DisplayInfo[]>([])
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [captureTyping, setCaptureTyping] = useState(true)
   const [captureScrolling, setCaptureScrolling] = useState(true)
+  const [captureVoice, setCaptureVoice] = useState(false)
   const { settings } = useSettingsStore()
 
   useEffect(() => {
@@ -34,6 +36,7 @@ export function RecordingSetup({ projectId, onClose }: Props): React.ReactElemen
   }
 
   const handleStart = async () => {
+    const startedAt = Date.now()
     const res = await recordingApi.start({
       projectId,
       // Empty selection falls back to all displays (handled in the main process).
@@ -41,10 +44,12 @@ export function RecordingSetup({ projectId, onClose }: Props): React.ReactElemen
       captureMouseClicks: true,
       captureTyping,
       captureScrolling,
+      captureVoice,
       screenshotDelay: settings.defaultScreenshotDelay,
       cropRadius: settings.defaultCropRadius
     })
     if (res.data) {
+      onStarted?.(captureVoice, startedAt)
       onClose()
     }
   }
@@ -135,6 +140,24 @@ export function RecordingSetup({ projectId, onClose }: Props): React.ReactElemen
                 onClick={() => setCaptureScrolling(!captureScrolling)}
               >
                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${captureScrolling ? 'left-5' : 'left-1'}`} />
+              </div>
+            </label>
+
+            <label className="flex items-center justify-between cursor-pointer">
+              <div>
+                <p className="text-sm font-medium text-slate-700 flex items-center gap-1.5">
+                  <Mic className="w-3.5 h-3.5 text-slate-500" />
+                  Record voice narration
+                </p>
+                <p className="text-xs text-slate-500">
+                  Describe steps aloud — AI will match your narration to each screenshot
+                </p>
+              </div>
+              <div
+                className={`w-10 h-6 rounded-full relative cursor-pointer transition-colors ${captureVoice ? 'bg-sky-500' : 'bg-slate-200'}`}
+                onClick={() => setCaptureVoice(!captureVoice)}
+              >
+                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-all ${captureVoice ? 'left-5' : 'left-1'}`} />
               </div>
             </label>
           </div>

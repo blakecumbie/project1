@@ -22,6 +22,10 @@ export interface GenerationRequest {
   maxTokens: number
   /** Optional OpenAI-compatible base URL for self-hosted endpoints. */
   baseUrl?: string
+  /** Voice narration matched to this step — used to enrich the description. */
+  voiceTranscript?: string
+  /** When set, bypasses the standard prompt and sends this text directly to the model. */
+  overridePrompt?: string
 }
 
 export interface LlmProvider {
@@ -60,8 +64,10 @@ Rules:
  * its own message envelope (Anthropic vs OpenAI vs Gemini differ on how
  * images are attached to a user turn).
  */
-export function buildUserPrompt(req: Pick<GenerationRequest, 'step' | 'projectTitle' | 'previousDescriptions'>): string {
-  const { step, projectTitle, previousDescriptions } = req
+export function buildUserPrompt(req: Pick<GenerationRequest, 'step' | 'projectTitle' | 'previousDescriptions' | 'voiceTranscript' | 'overridePrompt'>): string {
+  if (req.overridePrompt) return req.overridePrompt
+
+  const { step, projectTitle, previousDescriptions, voiceTranscript } = req
   const prevContext =
     previousDescriptions.length > 0
       ? `\nPrevious steps:\n${previousDescriptions
@@ -69,6 +75,12 @@ export function buildUserPrompt(req: Pick<GenerationRequest, 'step' | 'projectTi
           .map((d, i) => `${i + 1}. ${d}`)
           .join('\n')}`
       : ''
+
+  const voiceCtx = voiceTranscript
+    ? `\nVoice narration captured at this step: "${voiceTranscript}"\n` +
+      `Use the narration to enrich or clarify the description where helpful.`
+    : ''
+
   return `Generate a step description for this workflow action.
 
 Document: "${projectTitle}"
@@ -78,6 +90,6 @@ ${step.keyName ? `Key pressed: ${step.keyName}` : ''}
 ${step.scrollDeltaY !== null ? `Scroll direction: ${(step.scrollDeltaY ?? 0) > 0 ? 'down' : 'up'}` : ''}
 ${step.windowTitle ? `Window: ${step.windowTitle}` : ''}
 ${prevContext}
-
+${voiceCtx}
 Look at the screenshot to identify the specific UI element and generate an accurate, specific description.`
 }

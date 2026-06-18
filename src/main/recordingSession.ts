@@ -17,6 +17,7 @@ export class RecordingSession extends EventEmitter {
   private pendingEvent: CapturedEvent | null = null
   private stepCount = 0
   private startTime = 0
+  private voiceEnabled = false
   private elapsedTimer: ReturnType<typeof setInterval> | null = null
 
   // Serial processing queue — guarantees events are persisted in chronological order
@@ -46,6 +47,7 @@ export class RecordingSession extends EventEmitter {
     this.projectId = config.projectId
     this.stepCount = 0
     this.startTime = Date.now()
+    this.voiceEnabled = config.captureVoice ?? false
     this._state = 'recording'
     this.processQueue = Promise.resolve()
 
@@ -102,6 +104,7 @@ export class RecordingSession extends EventEmitter {
     this.config = null
     this.startTime = 0
     this.stepCount = 0
+    this.voiceEnabled = false
 
     this.emitState()
     logger.info(`Recording stopped. Project: ${pid}`)
@@ -260,12 +263,23 @@ export class RecordingSession extends EventEmitter {
     }
   }
 
-  private emitState(): void {
+  get startedAt(): number {
+    return this.startTime
+  }
+
+  get isVoiceEnabled(): boolean {
+    return this.voiceEnabled
+  }
+
+  private emitState(voiceMuted = false): void {
     this.emit('stateChanged', {
       state: this._state,
       projectId: this.projectId,
       stepCount: this.stepCount,
-      elapsedMs: this.elapsedMs
+      elapsedMs: this.elapsedMs,
+      startedAt: this.startTime,
+      voiceEnabled: this.voiceEnabled,
+      voiceMuted
     })
   }
 }

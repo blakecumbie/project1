@@ -24,6 +24,7 @@ interface StepRow {
   crop_y: number | null
   crop_radius: number | null
   scale_factor: number | null
+  voice_transcript: string | null
   description: string
   ai_raw_response: string | null
   ai_status: string
@@ -57,6 +58,7 @@ function toStep(row: StepRow): Step {
     cropY: row.crop_y ?? null,
     cropRadius: row.crop_radius ?? null,
     scaleFactor: row.scale_factor ?? null,
+    voiceTranscript: row.voice_transcript ?? null,
     description: row.description,
     aiStatus: row.ai_status as AiStatus,
     aiError: row.ai_error,
@@ -144,7 +146,7 @@ export const stepsRepo = {
     return this.get(id)!
   },
 
-  update(id: string, patch: Partial<Pick<Step, 'description' | 'aiStatus' | 'aiError' | 'screenshotPath' | 'fullScreenshotPath'>> & { aiRawResponse?: string }): Step | null {
+  update(id: string, patch: Partial<Pick<Step, 'description' | 'aiStatus' | 'aiError' | 'screenshotPath' | 'fullScreenshotPath' | 'voiceTranscript'>> & { aiRawResponse?: string }): Step | null {
     const now = Date.now()
     const fields: string[] = ['updated_at = ?']
     const values: unknown[] = [now]
@@ -155,6 +157,7 @@ export const stepsRepo = {
     if (patch.aiRawResponse !== undefined) { fields.push('ai_raw_response = ?'); values.push(patch.aiRawResponse) }
     if (patch.screenshotPath !== undefined) { fields.push('screenshot_path = ?'); values.push(patch.screenshotPath) }
     if (patch.fullScreenshotPath !== undefined) { fields.push('full_screenshot_path = ?'); values.push(patch.fullScreenshotPath) }
+    if (patch.voiceTranscript !== undefined) { fields.push('voice_transcript = ?'); values.push(patch.voiceTranscript) }
 
     values.push(id)
     getDb().prepare(`UPDATE steps SET ${fields.join(', ')} WHERE id = ?`).run(...values)

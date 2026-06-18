@@ -16,6 +16,7 @@ import {
 } from '../windowManager'
 import { logger } from '../utils/logger'
 import { validatedHandle } from '../security/ipcValidation'
+import { resetMuteState } from './audioHandlers'
 
 export function registerRecordingHandlers(): void {
   // Relay session events to BOTH the main window (for the dashboard step list)
@@ -44,6 +45,8 @@ export function registerRecordingHandlers(): void {
 
   validatedHandle(IPC.RECORDING_START, 'recordingStart', async (_event, payload) => {
     try {
+      _voiceMuted = false
+      resetMuteState()
       await recordingSession.start(payload)
       hideMain()
       showOverlay()

@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Download, Sparkles, Loader2, RotateCcw } from 'lucide-react'
+import { Download, Sparkles, Loader2, Mic } from 'lucide-react'
 import { useProjectStore } from '@/store/projectStore'
-import { ai as aiApi } from '@/lib/ipc'
-import type { Project } from '../../../../shared/types'
+import { ai as aiApi, audioApi } from '@/lib/ipc'
+import type { Project, VoiceTranscriptionProgress } from '../../../../shared/types'
 
 interface Props {
   project: Project
@@ -10,10 +10,13 @@ interface Props {
 }
 
 export function DocumentHeader({ project, onExport }: Props): React.ReactElement {
-  const { updateProjectTitle, aiProgress } = useProjectStore()
+  const { updateProjectTitle, aiProgress, setActiveProject } = useProjectStore()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(project.title)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [hasAudio, setHasAudio] = useState(false)
+  const [isTranscribing, setIsTranscribing] = useState(false)
+  const [transcribeProgress, setTranscribeProgress] = useState<VoiceTranscriptionProgress | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { setTitle(project.title) }, [project.title])
@@ -23,6 +26,27 @@ export function DocumentHeader({ project, onExport }: Props): React.ReactElement
       setIsGenerating(aiProgress.completed < aiProgress.total)
     }
   }, [aiProgress, project.id])
+
+  // Check if a voice recording exists for this project
+  useEffect(() => {
+    audioApi.check(project.id).then((res) => {
+      if (res.data) setHasAudio(res.data.exists)
+    })
+  }, [project.id])
+
+  // Listen for transcription progress
+  useEffect(() => {
+    const unsub = audioApi.onTranscriptionProgress((p: VoiceTranscriptionProgress) => {
+      setTranscribeProgress(p)
+      if (p.phase === 'done') {
+        setIsTranscribing(false)
+        setTranscribeProgress(null)
+        // Reload steps to show updated descriptions
+        setActiveProject(project.id)
+      }
+    })
+    return unsub
+  }, [project.id, setActiveProject])
 
   const commitTitle = async () => {
     setEditing(false)
@@ -41,6 +65,16 @@ export function DocumentHeader({ project, onExport }: Props): React.ReactElement
   const handleCancelAi = async () => {
     await aiApi.cancel(project.id)
     setIsGenerating(false)
+  }
+
+  const handleTranscribe = async () => {
+    setIsTranscribing(true)
+    setTranscribeProgress({ phase: 'starting', progress: 0 })
+    const res = await audioApi.transcribe(project.id)
+    if (res.error) {
+      setIsTranscribing(false)
+      setTranscribeProgress(null)
+    }
   }
 
   return (
@@ -73,6 +107,28 @@ export function DocumentHeader({ project, onExport }: Props): React.ReactElement
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            {hasAudio && (
+              isTranscribing ? (
+                <button disabled className="flex items-center gap-2 btn-secondary text-sky-600 border-sky-200">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {transcribeProgress?.phase === 'enhancing' && transcribeProgress.totalSteps
+                    ? `Enhancing ${transcribeProgress.currentStep}/${transcribeProgress.totalSteps}…`
+                    : transcribeProgress?.phase
+                      ? `${transcribeProgress.phase.charAt(0).toUpperCase() + transcribeProgress.phase.slice(1)}…`
+                      : 'Transcribing…'}
+                </button>
+              ) : (
+                <button
+                  onClick={handleTranscribe}
+                  className="flex items-center gap-2 btn-secondary"
+                  title="Transcribe voice recording and match to steps"
+                >
+                  <Mic className="w-4 h-4 text-sky-500" />
+                  Transcribe Voice
+                </button>
+              )
+            )}
+
             {isGenerating ? (
               <button
                 onClick={handleCancelAi}

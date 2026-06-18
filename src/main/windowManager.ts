@@ -149,9 +149,9 @@ function attachSecurityListeners(win: BrowserWindow): void {
     event.preventDefault()
   })
 
-  // Refuse all permission requests at the contents level (also handled
-  // session-wide in csp.ts; this is defense in depth).
-  win.webContents.session.setPermissionRequestHandler((_wc, _p, cb) => cb(false))
+  // Allow microphone for voice recording; deny everything else.
+  // session-wide rule in csp.ts already covers this — this is defense in depth.
+  win.webContents.session.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'))
 }
 
 export function createMainWindow(): BrowserWindow {

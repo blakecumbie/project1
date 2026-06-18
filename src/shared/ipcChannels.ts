@@ -45,6 +45,15 @@ export const IPC = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
 
+  // Audio / voice recording
+  AUDIO_CHUNK: 'audio:chunk',           // renderer → main: binary chunk from MediaRecorder
+  AUDIO_RECORDING_STOP: 'audio:recordingStop', // renderer → main: voice recording finished
+  AUDIO_MUTE_TOGGLE: 'audio:muteToggle', // overlay → main: toggle mic mute
+  AUDIO_MUTE_STATE: 'audio:muteState',  // main → renderer: current mute state
+  AUDIO_CHECK: 'audio:check',           // renderer → main: does a voice recording exist?
+  AI_TRANSCRIBE: 'ai:transcribe',       // renderer → main: start transcription pipeline
+  AI_TRANSCRIPTION_PROGRESS: 'ai:transcriptionProgress', // main → renderer: progress
+
   // System
   OPEN_EXTERNAL: 'system:openExternal',
   GET_DISPLAYS: 'system:getDisplays',

@@ -21,6 +21,7 @@ import { ExportDialog } from '@/components/export/ExportDialog'
 import { ai as aiApi, recording as recordingApi } from '@/lib/ipc'
 import type { RecordingStateChangedPayload, StepCapturedPayload, AiProgressPayload, AiStepDonePayload } from '../../../shared/types'
 import { useRecordingStore } from '@/store/recordingStore'
+import { useAudioRecorder } from '@/hooks/useAudioRecorder'
 import { Inbox } from 'lucide-react'
 
 export function DocumentPage(): React.ReactElement {
@@ -34,6 +35,9 @@ export function DocumentPage(): React.ReactElement {
 
   const [showSetup, setShowSetup] = useState(false)
   const [showExport, setShowExport] = useState(false)
+  const audioRecorder = useAudioRecorder()
+  // Track voice session: { projectId, startedAt } while recording with voice
+  const voiceSessionRef = useRef<{ projectId: string; startedAt: number } | null>(null)
 
   const project = projects.find((p) => p.id === id) ?? null
   const isNewRecording = searchParams.get('new') === '1'
@@ -55,11 +59,17 @@ export function DocumentPage(): React.ReactElement {
   // Subscribe to recording events
   useEffect(() => {
     const unsubs = [
-      recordingApi.onStateChanged((p: RecordingStateChangedPayload) => {
+      recordingApi.onStateChanged(async (p: RecordingStateChangedPayload) => {
         setRecState(p.state)
         setStepCount(p.stepCount)
         setElapsedMs(p.elapsedMs)
         if (p.state === 'idle' && p.projectId) {
+          // Stop voice recording if active
+          if (voiceSessionRef.current) {
+            const { projectId: vpid, startedAt } = voiceSessionRef.current
+            voiceSessionRef.current = null
+            await audioRecorder.stop(vpid, startedAt)
+          }
           // Refresh steps after recording stops
           if (p.projectId === id) setActiveProject(p.projectId)
           navigate(`/document/${p.projectId}`)
@@ -70,7 +80,7 @@ export function DocumentPage(): React.ReactElement {
       })
     ]
     return () => unsubs.forEach((fn) => fn())
-  }, [id, setRecState, setStepCount, setElapsedMs, appendStep, setActiveProject, navigate])
+  }, [id, setRecState, setStepCount, setElapsedMs, appendStep, setActiveProject, navigate, audioRecorder])
 
   // Subscribe to AI events
   useEffect(() => {
@@ -154,6 +164,12 @@ export function DocumentPage(): React.ReactElement {
         <RecordingSetup
           projectId={id}
           onClose={() => { setShowSetup(false); navigate(`/document/${id}`, { replace: true }) }}
+          onStarted={(captureVoice, startedAt) => {
+            if (captureVoice && id) {
+              voiceSessionRef.current = { projectId: id, startedAt }
+              audioRecorder.start(id).catch(() => {/* mic denied — graceful no-op */})
+            }
+          }}
         />
       )}
 
