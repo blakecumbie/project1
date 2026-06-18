@@ -13,14 +13,12 @@ export function exportHtml(project: Project, steps: Step[], outputPath: string):
           imgTag = `<img src="data:image/jpeg;base64,${b64}" alt="Step ${i + 1} screenshot" style="max-width:100%;border-radius:6px;border:1px solid #e2e8f0;display:block;" />`
         } catch {}
       }
-      const badge = step.actionType.replace('_', ' ')
       const desc = step.description || '<em style="color:#94a3b8">No description</em>'
 
       return `
     <div class="step">
       <div class="step-header">
         <span class="step-number">${i + 1}</span>
-        <span class="badge">${badge}</span>
       </div>
       ${imgTag ? `<div class="screenshot">${imgTag}</div>` : ''}
       <div class="description">${escapeHtml(typeof desc === 'string' ? desc : '')}</div>
@@ -45,8 +43,7 @@ export function exportHtml(project: Project, steps: Step[], outputPath: string):
     .step { background: white; border-radius: 12px; padding: 28px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #e2e8f0; }
     .step-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
     .step-number { background: #0ea5e9; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; flex-shrink: 0; }
-    .badge { background: #eff6ff; color: #1d4ed8; font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 100px; text-transform: uppercase; letter-spacing: .05em; }
-    .screenshot { margin-bottom: 16px; }
+.screenshot { margin-bottom: 16px; }
     .description { font-size: 15px; color: #334155; padding: 14px; background: #f8fafc; border-radius: 8px; border-left: 3px solid #0ea5e9; }
     @media print { body { background: white; } .step { box-shadow: none; border-color: #e2e8f0; page-break-inside: avoid; } }
   </style>
