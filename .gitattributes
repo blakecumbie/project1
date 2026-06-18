@@ -1,0 +1,5 @@
+# Force binary treatment for compiled artifacts
+*.exe binary
+*.node binary
+*.dll binary
+*.asar binary
