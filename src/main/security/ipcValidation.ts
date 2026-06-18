@@ -194,7 +194,8 @@ export const Schemas = {
       outputPath: BoundedString(4_096).refine((p) => !p.includes('\0'), 'unsafe_path'),
       options: z.object({
         includeStepNumbers: z.boolean(),
-        screenshotMaxWidth: FiniteInt.min(100).max(8_000)
+        screenshotMaxWidth: FiniteInt.min(100).max(8_000),
+        stepsPerPage: FiniteInt.min(1).max(4).optional()
       })
     })
   ]),

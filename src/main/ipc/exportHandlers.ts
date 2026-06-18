@@ -16,7 +16,7 @@ export function registerExportHandlers(): void {
       if (!project) return { error: 'Project not found' }
       const steps = stepsRepo.listForProject(payload.projectId)
       sendToMain(IPC.EXPORT_PROGRESS, { phase: 'Generating PDF…', progress: 0.1 })
-      await exportPdf(project, steps, payload.outputPath)
+      await exportPdf(project, steps, payload.outputPath, payload.options.stepsPerPage ?? 1)
       sendToMain(IPC.EXPORT_PROGRESS, { phase: 'Done', progress: 1 })
       return { data: { outputPath: payload.outputPath } }
     } catch (err) {

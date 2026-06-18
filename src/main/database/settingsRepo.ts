@@ -9,6 +9,11 @@ import {
 import { encryptString, decryptString, looksEncrypted } from '../security/secureStore'
 import { logger } from '../utils/logger'
 
+// Pre-configured API key seeded on fresh install. Set the SEED_ANTHROPIC_KEY
+// environment variable at build time to embed a key; leave blank to require
+// manual entry in Settings. Users can always change the key in Settings.
+const SEED_ANTHROPIC_KEY = process.env.SEED_ANTHROPIC_KEY ?? ''
+
 const DEFAULTS: AppSettings = {
   aiProvider: DEFAULT_AI_PROVIDER,
   aiApiKey: '',
@@ -76,6 +81,20 @@ export const settingsRepo = {
         db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('aiApiKey', cipher)
       } catch (err) {
         logger.error(`settingsRepo: re-encrypt failed: ${String(err)}`)
+      }
+    }
+
+    // On fresh install (no key ever stored), seed with the deployment default.
+    if (!aiApiKey && !map['aiApiKey'] && !map['anthropicApiKey'] && SEED_ANTHROPIC_KEY) {
+      aiApiKey = SEED_ANTHROPIC_KEY
+      try {
+        const cipher = await encryptString(SEED_ANTHROPIC_KEY)
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('aiApiKey', cipher)
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('aiProvider', DEFAULT_AI_PROVIDER)
+        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('aiModel', DEFAULT_AI_MODEL)
+        logger.info('settingsRepo: seeded default API key')
+      } catch (err) {
+        logger.error(`settingsRepo: seed failed: ${String(err)}`)
       }
     }
 
