@@ -1,0 +1,116 @@
+; ============================================================
+;  SOP Builder — per-user Windows installer (no admin required)
+;  Template — @APP_VERSION@ and @DIST_DIR@ are substituted at build
+;  time by scripts/build-win-installer.sh. Do not edit the generated
+;  dist/installer.nsi directly; edit this template instead.
+; ============================================================
+
+Unicode true
+ManifestSupportedOS all
+SetCompressor /SOLID lzma
+
+; Resolve relative paths (win-unpacked, OutFile) against the dist directory
+; so the compiler can be invoked from anywhere.
+!cd "@DIST_DIR@"
+
+!define APP_NAME       "SOP Builder"
+!define APP_VERSION    "@APP_VERSION@"
+!define APP_PUBLISHER  "SOP Builder"
+!define APP_EXE        "SOP Builder.exe"
+!define APP_ID         "com.sopbuilder.app"
+!define UNINST_KEY     "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_ID}"
+
+Name "${APP_NAME}"
+OutFile "SOP-Builder-Setup-${APP_VERSION}.exe"
+BrandingText "${APP_NAME} ${APP_VERSION}"
+
+; Per-user install — NO admin / UAC required
+RequestExecutionLevel user
+InstallDir "$LOCALAPPDATA\Programs\${APP_NAME}"
+InstallDirRegKey HKCU "Software\${APP_NAME}" "InstallDir"
+
+; ------ UI ------
+!include "MUI2.nsh"
+!define MUI_ABORTWARNING
+!define MUI_ICON "${NSISDIR}/Contrib/Graphics/Icons/modern-install.ico"
+!define MUI_UNICON "${NSISDIR}/Contrib/Graphics/Icons/modern-uninstall.ico"
+
+!insertmacro MUI_PAGE_WELCOME
+!insertmacro MUI_PAGE_DIRECTORY
+!insertmacro MUI_PAGE_INSTFILES
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_EXE}"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch ${APP_NAME}"
+!insertmacro MUI_PAGE_FINISH
+
+!insertmacro MUI_UNPAGE_CONFIRM
+!insertmacro MUI_UNPAGE_INSTFILES
+
+!insertmacro MUI_LANGUAGE "English"
+
+VIProductVersion "@APP_VERSION@.0"
+VIAddVersionKey  "ProductName"   "${APP_NAME}"
+VIAddVersionKey  "CompanyName"   "${APP_PUBLISHER}"
+VIAddVersionKey  "FileDescription" "${APP_NAME} Installer"
+VIAddVersionKey  "FileVersion"   "${APP_VERSION}"
+VIAddVersionKey  "ProductVersion" "${APP_VERSION}"
+VIAddVersionKey  "LegalCopyright" "Copyright (C) 2026"
+
+; ------ Install section ------
+Section "Install" SEC_MAIN
+  ; Close any running instance so the executable isn't locked. Without this,
+  ; upgrading while the app is open fails with
+  ; "Error opening file for writing ... SOP Builder.exe".
+  DetailPrint "Closing any running ${APP_NAME}..."
+  nsExec::Exec 'taskkill /F /IM "${APP_EXE}" /T'
+  Pop $0
+  Sleep 1500
+
+  SetOutPath "$INSTDIR"
+  SetOverwrite on
+
+  ; Copy every file from the electron-builder win-unpacked output
+  File /r "win-unpacked/*.*"
+
+  ; Shortcuts (per-user — no admin)
+  CreateDirectory "$SMPROGRAMS\${APP_NAME}"
+  CreateShortcut  "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
+  CreateShortcut  "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk" "$INSTDIR\uninstall.exe"
+  CreateShortcut  "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_EXE}"
+
+  ; Register in Programs & Features (per-user HKCU — no admin)
+  WriteRegStr HKCU "${UNINST_KEY}" "DisplayName"     "${APP_NAME}"
+  WriteRegStr HKCU "${UNINST_KEY}" "DisplayVersion"  "${APP_VERSION}"
+  WriteRegStr HKCU "${UNINST_KEY}" "Publisher"       "${APP_PUBLISHER}"
+  WriteRegStr HKCU "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKCU "${UNINST_KEY}" "UninstallString" '"$INSTDIR\uninstall.exe"'
+  WriteRegStr HKCU "${UNINST_KEY}" "DisplayIcon"     '"$INSTDIR\${APP_EXE}"'
+  WriteRegDWORD HKCU "${UNINST_KEY}" "NoModify" 1
+  WriteRegDWORD HKCU "${UNINST_KEY}" "NoRepair" 1
+
+  ; Save install dir for next time / uninstaller
+  WriteRegStr HKCU "Software\${APP_NAME}" "InstallDir" "$INSTDIR"
+
+  ; Write uninstaller
+  WriteUninstaller "$INSTDIR\uninstall.exe"
+SectionEnd
+
+; ------ Uninstall section ------
+Section "Uninstall"
+  ; Close the app before removing files.
+  nsExec::Exec 'taskkill /F /IM "${APP_EXE}" /T'
+  Pop $0
+  Sleep 1000
+
+  ; Remove shortcuts
+  Delete "$DESKTOP\${APP_NAME}.lnk"
+  Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
+  Delete "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk"
+  RMDir  "$SMPROGRAMS\${APP_NAME}"
+
+  ; Remove app files
+  RMDir /r "$INSTDIR"
+
+  ; Clean registry
+  DeleteRegKey HKCU "${UNINST_KEY}"
+  DeleteRegKey HKCU "Software\${APP_NAME}"
+SectionEnd
