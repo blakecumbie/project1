@@ -186,6 +186,10 @@ export const Schemas = {
   aiTestKey: z.tuple([BoundedString(512)]),
   aiSetKey: z.tuple([BoundedString(512)]),
   aiTranscribe: z.tuple([Uuid]),
+  audioRecordingStop: z.tuple([z.object({
+    projectId: Uuid,
+    startedAt: FiniteInt.positive()
+  })]),
 
   // Export
   exportPayload: z.tuple([

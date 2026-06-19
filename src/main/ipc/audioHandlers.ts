@@ -7,14 +7,16 @@ import { settingsRepo } from '../database/settingsRepo'
 import { sendToMain, sendToOverlay } from '../windowManager'
 import { validatedHandle } from '../security/ipcValidation'
 import { logger } from '../utils/logger'
-import { z } from 'zod'
 
 let voiceMuted = false
 
 export function registerAudioHandlers(): void {
   // Binary chunk from MediaRecorder — bypass Zod (binary validation is impractical)
   ipcMain.handle(IPC.AUDIO_CHUNK, (_event, projectId: string, chunk: Buffer) => {
-    if (typeof projectId !== 'string') return { error: 'invalid_payload' }
+    // UUID check prevents path-traversal — audioFilePath() does a bare join(audioDir(), id)
+    if (typeof projectId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(projectId)) {
+      return { error: 'invalid_payload' }
+    }
     if (!Buffer.isBuffer(chunk) && !(chunk instanceof Uint8Array)) return { error: 'invalid_payload' }
     openSession(projectId)
     appendChunk(projectId, Buffer.from(chunk))
@@ -22,13 +24,9 @@ export function registerAudioHandlers(): void {
   })
 
   // Renderer signals that voice recording is finished
-  ipcMain.handle(IPC.AUDIO_RECORDING_STOP, async (_event, payload: unknown) => {
+  validatedHandle(IPC.AUDIO_RECORDING_STOP, 'audioRecordingStop', async (_event, payload) => {
     try {
-      const { projectId, startedAt } = z.object({
-        projectId: z.string().uuid(),
-        startedAt: z.number().int().positive()
-      }).parse(payload)
-      await closeSession(projectId, startedAt)
+      await closeSession(payload.projectId, payload.startedAt)
       return { data: { ok: true } }
     } catch (e) {
       return { error: String(e) }

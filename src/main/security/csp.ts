@@ -79,12 +79,17 @@ export function installContentSecurityPolicy(): void {
     callback({ responseHeaders: headers })
   })
 
-  // Allow microphone for voice recording; deny everything else.
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
-    cb(permission === 'media')
+  // Allow microphone (audio-only) for voice recording; deny camera and everything else.
+  // 'media' covers both audio and video — inspect mediaTypes to restrict to audio only.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => {
+    if (permission !== 'media') { cb(false); return }
+    const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
+    cb(types.length > 0 && types.every((t) => t === 'audio'))
   })
-  session.defaultSession.setPermissionCheckHandler((_wc, permission) => {
-    return permission === 'media'
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, _origin, details) => {
+    if (permission !== 'media') return false
+    const types = (details as { mediaType?: string }).mediaType
+    return types === 'audio'
   })
 
   // Block any certificate-error fallback. Pinning is enforced separately;

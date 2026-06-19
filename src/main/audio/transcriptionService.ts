@@ -1,4 +1,4 @@
-import { createReadStream } from 'fs'
+import { readFileSync } from 'fs'
 import FormData from 'form-data'
 import { logger } from '../utils/logger'
 import type { AudioTranscription } from '@shared/types'
@@ -11,8 +11,11 @@ export async function transcribeAudio(opts: {
   const { audioPath, apiKey, baseUrl } = opts
   const url = `${baseUrl.replace(/\/$/, '')}/audio/transcriptions`
 
+  // Read into a Buffer — form-data's getBuffer() silently drops ReadStream entries
+  const audioBuffer = readFileSync(audioPath)
+
   const form = new FormData()
-  form.append('file', createReadStream(audioPath), {
+  form.append('file', audioBuffer, {
     filename: 'recording.webm',
     contentType: 'audio/webm'
   })
@@ -20,16 +23,14 @@ export async function transcribeAudio(opts: {
   form.append('response_format', 'verbose_json')
   form.append('timestamp_granularities[]', 'segment')
 
-  logger.info('transcriptionService: uploading to Whisper')
-
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${apiKey}`,
-    ...form.getHeaders()
-  }
+  logger.info(`transcriptionService: uploading ${audioBuffer.byteLength} bytes to Whisper`)
 
   const res = await fetch(url, {
     method: 'POST',
-    headers,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      ...form.getHeaders()
+    },
     body: form.getBuffer()
   })
 

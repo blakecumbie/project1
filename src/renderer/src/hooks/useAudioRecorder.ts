@@ -2,7 +2,8 @@ import { useRef, useCallback, useEffect } from 'react'
 import { IPC } from '@shared/ipcChannels'
 
 export interface AudioRecorderControls {
-  start: (projectId: string) => Promise<void>
+  /** Returns true if the microphone started successfully, false if permission was denied. */
+  start: (projectId: string) => Promise<boolean>
   stop: (projectId: string, startedAt: number) => Promise<void>
   mute: () => void
   unmute: () => void
@@ -24,7 +25,7 @@ export function useAudioRecorder(): AudioRecorderControls {
     return unsub
   }, [])
 
-  const start = useCallback(async (projectId: string): Promise<void> => {
+  const start = useCallback(async (projectId: string): Promise<boolean> => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
       streamRef.current = stream
@@ -36,13 +37,14 @@ export function useAudioRecorder(): AudioRecorderControls {
       mr.ondataavailable = async (e) => {
         if (e.data.size === 0) return
         const buf = await e.data.arrayBuffer()
-        // Fire-and-forget — don't await to avoid blocking ondataavailable
         window.api.invoke(IPC.AUDIO_CHUNK, projectId, buf).catch(() => {/* silent */})
       }
 
-      mr.start(1000) // emit a chunk every 1 second
+      mr.start(1000)
+      return true
     } catch (err) {
       console.warn('useAudioRecorder: getUserMedia failed', err)
+      return false
     }
   }, [])
 
@@ -53,10 +55,13 @@ export function useAudioRecorder(): AudioRecorderControls {
         mr.onstop = () => resolve()
         mr.stop()
       })
+      // Chrome fires one final ondataavailable synchronously before onstop, but the
+      // handler is async (arrayBuffer() + IPC). Wait a tick so those in-flight
+      // promises can dispatch their AUDIO_CHUNK before we close the session.
+      await new Promise((r) => setTimeout(r, 150))
     }
     mediaRecorderRef.current = null
 
-    // Stop all mic tracks to release the device indicator
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     projectIdRef.current = null

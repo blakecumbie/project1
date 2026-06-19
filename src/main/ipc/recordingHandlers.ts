@@ -45,7 +45,6 @@ export function registerRecordingHandlers(): void {
 
   validatedHandle(IPC.RECORDING_START, 'recordingStart', async (_event, payload) => {
     try {
-      _voiceMuted = false
       resetMuteState()
       await recordingSession.start(payload)
       hideMain()

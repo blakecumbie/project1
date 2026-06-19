@@ -35,7 +35,8 @@ export function DocumentPage(): React.ReactElement {
 
   const [showSetup, setShowSetup] = useState(false)
   const [showExport, setShowExport] = useState(false)
-  const audioRecorder = useAudioRecorder()
+  // Destructure to get stable useCallback references — avoids subscription churn in effects
+  const { start: startAudio, stop: stopAudio } = useAudioRecorder()
   // Track voice session: { projectId, startedAt } while recording with voice
   const voiceSessionRef = useRef<{ projectId: string; startedAt: number } | null>(null)
 
@@ -68,7 +69,7 @@ export function DocumentPage(): React.ReactElement {
           if (voiceSessionRef.current) {
             const { projectId: vpid, startedAt } = voiceSessionRef.current
             voiceSessionRef.current = null
-            await audioRecorder.stop(vpid, startedAt)
+            await stopAudio(vpid, startedAt).catch(() => {/* silent — recording already gone */})
           }
           // Refresh steps after recording stops
           if (p.projectId === id) setActiveProject(p.projectId)
@@ -80,7 +81,7 @@ export function DocumentPage(): React.ReactElement {
       })
     ]
     return () => unsubs.forEach((fn) => fn())
-  }, [id, setRecState, setStepCount, setElapsedMs, appendStep, setActiveProject, navigate, audioRecorder])
+  }, [id, setRecState, setStepCount, setElapsedMs, appendStep, setActiveProject, navigate, stopAudio])
 
   // Subscribe to AI events
   useEffect(() => {
@@ -166,8 +167,11 @@ export function DocumentPage(): React.ReactElement {
           onClose={() => { setShowSetup(false); navigate(`/document/${id}`, { replace: true }) }}
           onStarted={(captureVoice, startedAt) => {
             if (captureVoice && id) {
-              voiceSessionRef.current = { projectId: id, startedAt }
-              audioRecorder.start(id).catch(() => {/* mic denied — graceful no-op */})
+              // Only set voiceSessionRef if the mic actually started — prevents a
+              // spurious AUDIO_RECORDING_STOP IPC when permission is denied
+              startAudio(id).then((ok) => {
+                if (ok) voiceSessionRef.current = { projectId: id, startedAt }
+              }).catch(() => {/* silent */})
             }
           }}
         />
