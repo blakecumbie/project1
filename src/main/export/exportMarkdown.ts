@@ -37,7 +37,6 @@ export function exportMarkdown(project: Project, steps: Step[], outputDir: strin
 
     // Metadata as blockquote
     const meta: string[] = []
-    if (step.actionType) meta.push(`**Action:** ${step.actionType.replace('_', ' ')}`)
     if (step.typedText) meta.push(`**Typed:** \`${step.typedText}\``)
     if (step.keyName) meta.push(`**Key:** ${step.keyName}`)
     if (meta.length > 0) {

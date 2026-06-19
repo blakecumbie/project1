@@ -71,6 +71,10 @@ const MIGRATIONS = [
       'ALTER TABLE steps ADD COLUMN crop_radius INTEGER',
       'ALTER TABLE steps ADD COLUMN scale_factor REAL'
     ]
+  },
+  {
+    version: 2,
+    alters: ['ALTER TABLE steps ADD COLUMN voice_transcript TEXT']
   }
 ]
 

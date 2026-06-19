@@ -37,7 +37,8 @@ export function registerAiHandlers(): void {
 
   validatedHandle(IPC.AI_TEST_KEY, 'aiTestKey', async (_event, apiKey) => {
     try {
-      const ok = await testApiKey(apiKey)
+      const settings = await settingsRepo.get()
+      const ok = await testApiKey(apiKey, settings)
       return { data: { valid: ok } }
     } catch {
       return { data: { valid: false } }
@@ -46,7 +47,7 @@ export function registerAiHandlers(): void {
 
   validatedHandle(IPC.AI_SET_KEY, 'aiSetKey', async (_event, apiKey) => {
     try {
-      await settingsRepo.set({ anthropicApiKey: apiKey })
+      await settingsRepo.set({ aiApiKey: apiKey })
       return { data: { success: true } }
     } catch (err) {
       return { error: String(err) }

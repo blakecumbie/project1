@@ -22,13 +22,13 @@ PCI / financial-confidentiality standards.
 | V-05 | **High** | Navigation | `setWindowOpenHandler` blindly calls `shell.openExternal(url)` for any URL. A renderer compromise can launch arbitrary URI schemes (e.g. `file://`, `vbscript:`). | Fixed (allowlist) |
 | V-06 | **High** | Navigation | No `will-navigate` handler — a malicious link/CSS can navigate the renderer to an attacker-controlled origin, breaking the same-origin assumption of the preload. | Fixed |
 | V-07 | **High** | CSP | CSP is set only via `<meta>` tag, allows `'unsafe-eval'` in `script-src`, and allows `data:`/`blob:` images. `<meta>` CSP is bypassable in some Electron load paths. | Fixed |
-| V-08 | **High** | PII / PCI | No redaction of credit-card numbers, SSNs, account numbers or financial tables before screenshots are written to disk or transmitted to the LLM. | Fixed |
+| V-08 | **High** | PII / PCI | No redaction of credit-card numbers, SSNs, account numbers or financial tables before screenshots are written to disk or transmitted to the LLM. | **Removed in v2.2.2 (product decision)** — automatic OCR redaction was taken out at the owner's request; screenshots are stored as captured. Operators must avoid recording sensitive screens, as with any screen-capture tool. Manual redaction boxes remain available in the screenshot editor. |
 | V-09 | **High** | Network | TLS version not enforced; connections fall back to TLS 1.2. No certificate pinning. No zero-data-retention header on Anthropic calls. | Fixed |
 | V-10 | **High** | Custom protocol | `protocol.registerFileProtocol(IMG_PROTOCOL, …)` resolves the relative path with `join()` — a `..` segment can escape the images directory and read arbitrary files. | Fixed |
 | V-11 | **Medium** | Ephemeral state | Captured keystroke buffer (`keyBuffer`) is a normal JS string; not zeroed after flush. Pending screenshot buffers are not wiped after persistence. | Fixed |
 | V-12 | **Medium** | `OPEN_EXTERNAL` | Validation only checks `startsWith('http')`. `httpsmalicious://…` or `https://attacker.example` both pass. | Fixed (allowlist + `URL` parse) |
 | V-13 | **Medium** | DB indirection | `projectsRepo.list` interpolates `orderBy`/`orderDir` directly into SQL. Inputs come from the renderer with no allowlist enforcement at runtime. | Fixed (Zod enum) |
-| V-14 | **Medium** | Logging | `logger` writes raw error stacks (which may contain typed text or paths) to a flat-file log at `userData/logs/app.log`. | Fixed (redactor) |
+| V-14 | **Medium** | Logging | `logger` writes raw error stacks (which may contain typed text or paths) to a flat-file log at `userData/logs/app.log`. | Mitigated — IPC validation failures log the channel name only, never payload values. |
 | V-15 | **Low** | Supply chain | No SBOM. No automated vulnerability gate. `npm audit` not run on CI. | Fixed (script + CI) |
 
 ---
@@ -51,7 +51,6 @@ PCI / financial-confidentiality standards.
 │   Main process (Node, full FS)    │  ← only place that holds secrets
 │   - keytar key vault              │
 │   - AES-256-GCM at rest           │
-│   - Tesseract WASM (sandboxed)    │
 │   - TLS 1.3 + cert pin            │
 └───────────────────────────────────┘
 ```
@@ -124,23 +123,17 @@ custom protocol load.
 - Renderer side: `src/preload/index.ts` already enforces a channel allow-list;
   this is unchanged but documented.
 
-### 3.4 Local PII / PCI redaction (`src/main/security/redaction.ts`)
+### 3.4 Local PII / PCI redaction — **removed in v2.2.2**
 
-- Each captured screenshot is passed through `redactSensitive(buffer)` **before**
-  being saved or sent to the LLM.
-- `tesseract.js` runs the OCR inside a WASM sandbox, returning words with
-  bounding boxes.
-- Detectors flag:
-  - **Credit-card numbers** — 13-19 digit groups passing the **Luhn check**.
-  - **US Social-Security numbers** — `\b\d{3}-\d{2}-\d{4}\b` and the
-    space-separated variant; rejects obvious test patterns (000-, 666-, 9xx-).
-  - **Routing / IBAN-style account numbers** — `\b\d{9}\b` and
-    `\b[A-Z]{2}\d{2}[A-Z0-9]{1,30}\b`.
-  - **Financial-table headings** — case-insensitive token list (`Balance`,
-    `Account #`, `Routing #`, `SWIFT`, `Card number`, `CVC`).
-- Detected boxes are blacked out with `jimp` in-memory; the original buffer is
-  zeroed (`buffer.fill(0)`) before being released.
-- Redaction runs in the main process — the renderer never sees raw frames.
+The automatic OCR redaction pipeline (`src/main/security/redaction.ts`, backed
+by `tesseract.js` + `jimp`) was **removed at the product owner's request**.
+Screenshots are now stored exactly as captured — no on-screen card numbers,
+SSNs, or financial text are detected or blacked out automatically.
+
+Operational guidance: because there is no automatic redaction, avoid recording
+screens that display sensitive data, the same way you would with any
+screen-capture or screen-sharing tool. Manual redaction boxes can still be drawn
+per-screenshot in the in-app editor.
 
 ### 3.5 Ephemeral state & secure memory wipe (`src/main/security/memoryGuard.ts`)
 
@@ -150,7 +143,7 @@ custom protocol load.
 - `inputHooks.ts` now uses `SecureString` for the typed-text buffer; it is
   cleared after every flush and on `stop()`.
 - `recordingSession.ts` wipes both cropped and full screenshot buffers as
-  soon as the redacted/encrypted versions have been written and emitted.
+  soon as they have been written to disk.
 - A `process.on('exit')` hook in `index.ts` zeroes any tracked secure
   buffers before the process terminates.
 
@@ -203,8 +196,6 @@ custom protocol load.
   (path-traversal, oversized payloads, wrong types, prototype pollution).
 - `tests/memoryGuard.test.ts` — verifies `SecureBuffer.wipe()` zeroes the
   underlying memory and that `SecureString.clear()` is observable.
-- `tests/redaction.test.ts` — feeds synthetic CC/SSN strings through the
-  detector and asserts the bounding boxes are blacked out.
 - Unit tests are runnable via `npm test`.
 
 ---

@@ -1,5 +1,6 @@
 import { desktopCapturer, screen, nativeImage } from 'electron'
 import { DEFAULT_CROP_RADIUS, SCREENSHOT_JPEG_QUALITY } from '@shared/constants'
+import type { DisplayInfo } from '@shared/types'
 
 interface CaptureOptions {
   displayId?: string
@@ -117,14 +118,36 @@ export function cropFromFull(
   }
 }
 
-export async function getDisplayList(): Promise<{ id: string; label: string; isPrimary: boolean }[]> {
+export async function getDisplayList(): Promise<DisplayInfo[]> {
   const displays = screen.getAllDisplays()
   const primary = screen.getPrimaryDisplay()
   return displays.map((d, i) => ({
     id: String(d.id),
     label: `Display ${i + 1}${d.id === primary.id ? ' (Primary)' : ''} — ${d.size.width}×${d.size.height}`,
+    bounds: { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height },
     isPrimary: d.id === primary.id
   }))
+}
+
+/**
+ * Resolve which physical display a global virtual-desktop point lands on.
+ *
+ * `uiohook` reports mouse/scroll coordinates in the global virtual-desktop
+ * space that spans all monitors. To capture and crop the correct screen for a
+ * multi-monitor setup we must (a) find the display under the point and (b)
+ * translate the point into that display's local space (`global - bounds.origin`).
+ */
+export function getDisplayForPoint(x: number, y: number): {
+  id: string
+  bounds: { x: number; y: number; width: number; height: number }
+  scaleFactor: number
+} {
+  const d = screen.getDisplayNearestPoint({ x: Math.round(x), y: Math.round(y) })
+  return {
+    id: String(d.id),
+    bounds: { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height },
+    scaleFactor: d.scaleFactor
+  }
 }
 
 // Returns the click dot position in the cropped image's pixel coordinate space.

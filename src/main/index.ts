@@ -7,7 +7,6 @@ import { logger } from './utils/logger'
 import { IMG_PROTOCOL } from '@shared/constants'
 import { installContentSecurityPolicy } from './security/csp'
 import { wipeAllTracked } from './security/memoryGuard'
-import { shutdownRedactor } from './security/redaction'
 import { logNetworkConfig } from './security/network'
 
 // Required for native modules on some Linux setups
@@ -77,7 +76,6 @@ app.on('will-quit', async () => {
   if (recordingSession.state !== 'idle') {
     await recordingSession.stop().catch(() => {})
   }
-  await shutdownRedactor().catch(() => {})
   // Zero every tracked secure buffer / string before the process exits.
   wipeAllTracked()
   closeDatabase()

@@ -1,14 +1,13 @@
 /**
  * Outbound-network hardening:
- *   1. Force TLS 1.3 minimum on every HTTPS connection.
- *   2. Pin the SubjectPublicKeyInfo SHA-256 of `api.anthropic.com`
- *      (with a backup pin to allow rotation).
- *   3. Centralize the Anthropic header set so zero-data-retention is always
- *      sent — no caller can opt out.
+ *   1. Force TLS 1.2 minimum on every HTTPS connection (TLS 1.3 preferred).
+ *   2. Optionally pin the SubjectPublicKeyInfo SHA-256 of `api.anthropic.com`
+ *      when `ANTHROPIC_PINS` is set at build time.
  *
- * The agent is plumbed into the Anthropic SDK via `fetchOptions` (the SDK
- * v0.24 routes through `fetch()` internally; passing `dispatcher`/`agent`
- * via `fetchOptions` ensures both code paths are covered).
+ * Pinning is **opt-in** — shipping a build with no pins still validates the
+ * cert chain via Chromium's normal logic. Hard-failing every connection in
+ * the absence of operator-supplied pins (the v2.2.0 behaviour) bricked the
+ * default install for users who hadn't configured pins.
  */
 
 import { Agent, AgentOptions } from 'https'
@@ -17,9 +16,10 @@ import { createHash } from 'crypto'
 import { logger } from '../utils/logger'
 
 /**
- * SubjectPublicKeyInfo SHA-256 base64 fingerprints for `api.anthropic.com`.
+ * Optional SubjectPublicKeyInfo SHA-256 base64 fingerprints for
+ * `api.anthropic.com`. Set via `ANTHROPIC_PINS=fp1,fp2` at build time.
  *
- * Operators MUST regenerate these before each release window:
+ * Generate with:
  *
  *   echo | openssl s_client -servername api.anthropic.com \
  *     -connect api.anthropic.com:443 2>/dev/null \
@@ -27,12 +27,8 @@ import { logger } from '../utils/logger'
  *   | openssl pkey -pubin -outform DER \
  *   | openssl dgst -sha256 -binary | base64
  *
- * The list is checked in order; presence of ANY pin in the chain is sufficient.
- * Always keep at least one *backup* pin (next planned cert) to avoid bricking
- * clients during rotation.
- *
- * The values below are placeholders — they MUST be replaced via the
- * `ANTHROPIC_PINS` env at build time, comma-separated.
+ * Always include a backup pin (next planned cert) to avoid bricking clients
+ * during rotation.
  */
 const ANTHROPIC_PINS: ReadonlyArray<string> = (process.env.ANTHROPIC_PINS ?? '')
   .split(',')
@@ -40,30 +36,25 @@ const ANTHROPIC_PINS: ReadonlyArray<string> = (process.env.ANTHROPIC_PINS ?? '')
   .filter((s) => s.length === 44) // base64 of a 32-byte SHA-256 is 44 chars
 
 const ANTHROPIC_HOST = 'api.anthropic.com'
+const PINNED_HOSTS = new Set<string>([ANTHROPIC_HOST])
 
 /** SHA-256 of a DER SubjectPublicKeyInfo, base64-encoded. */
 function spkiFingerprint(cert: PeerCertificate): string {
-  // Node exposes the SPKI bytes via `cert.pubkey` only on newer Node;
-  // fall back to constructing from `cert.raw` would require a full ASN.1
-  // parser. We rely on `cert.pubkey` being populated under Node 20+ which
-  // ships in Electron 28.
   const pubkey = (cert as unknown as { pubkey?: Buffer }).pubkey
   if (!pubkey) throw new Error('cert.pubkey unavailable — cannot pin')
   return createHash('sha256').update(pubkey).digest('base64')
 }
 
-function buildPinnedAgent(): Agent {
+function buildSecureAgent(): Agent {
   const opts: AgentOptions = {
-    minVersion: 'TLSv1.3',
-    // Belt-and-braces: also set maxVersion so a downgrade attack can't
-    // negotiate TLS 1.2.
-    maxVersion: 'TLSv1.3',
+    // TLS 1.2 minimum — TLS 1.3 is preferred and negotiated by default but we
+    // don't clamp maxVersion. Some upstream load balancers still negotiate
+    // TLS 1.2 for the initial handshake.
+    minVersion: 'TLSv1.2',
     keepAlive: true,
     ALPNProtocols: ['h2', 'http/1.1']
   }
-  // Use a custom subclass so we can hook every connection without fighting
-  // Node's overload signatures for `Agent.prototype.createConnection`.
-  class PinnedAgent extends Agent {
+  class SecureAgent extends Agent {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     createConnection(options: any, cb?: (err: Error | null, sock?: any) => void): any {
       const wrappedCb = cb
@@ -83,25 +74,17 @@ function buildPinnedAgent(): Agent {
     }
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }
-  return new PinnedAgent(opts)
+  return new SecureAgent(opts)
 }
 
 function verifyPin(socket: TLSSocket, host: string | undefined, cb: (err: Error | null) => void): void {
   socket.once('secureConnect', () => {
-    if (host !== ANTHROPIC_HOST || ANTHROPIC_PINS.length === 0) {
-      // Pinning only enforced for Anthropic right now. If pins aren't set,
-      // we still required TLS 1.3 above; refuse the connection in production
-      // builds because shipping with no pins is a misconfig.
-      if (host === ANTHROPIC_HOST && process.env.NODE_ENV === 'production') {
-        return cb(new Error('TLS pin set is empty; refusing to connect'))
-      }
+    // Pinning only applies to known sensitive hosts AND only when the operator
+    // has supplied pins. Otherwise we rely on Chromium's chain validation.
+    if (!host || !PINNED_HOSTS.has(host) || ANTHROPIC_PINS.length === 0) {
       return cb(null)
     }
     try {
-      // `getPeerCertificate(true)` returns a `DetailedPeerCertificate` whose
-      // chain links via `.issuerCertificate`. Older Node typings don't expose
-      // that field on `PeerCertificate`, so we treat the chain as a generic
-      // linked list of cert-shaped objects.
       type ChainNode = PeerCertificate & {
         issuerCertificate?: ChainNode
         fingerprint?: string
@@ -128,29 +111,28 @@ function verifyPin(socket: TLSSocket, host: string | undefined, cb: (err: Error 
 
 let _agent: Agent | null = null
 export function pinnedHttpsAgent(): Agent {
-  if (!_agent) _agent = buildPinnedAgent()
+  if (!_agent) _agent = buildSecureAgent()
   return _agent
 }
 
 /**
- * The Anthropic header set required for zero-data-retention.
- * Centralized so that no caller can opt out, and so that toggling the version
- * is a one-line change.
+ * Anthropic-specific request headers. Only the API version is required.
+ *
+ * Zero-data-retention is enforced at the **organization** level in the
+ * Anthropic console — there is no per-request beta header that toggles it.
+ * Operators that need ZDR must enroll their org out-of-band; this client
+ * does not (and cannot) opt them in via a header.
  */
 export function anthropicSecurityHeaders(): Record<string, string> {
   return {
     'anthropic-version': '2023-06-01',
-    // Header set communicated by Anthropic enterprise account managers.
-    // Requires the org to be enrolled in ZDR.
-    'anthropic-beta': 'zero-retention-2024-09-01',
-    // Identify the client so anomalous traffic can be flagged at the gateway.
     'x-sopbuilder-client': 'sopbuilder-electron'
   }
 }
 
 /** Diagnostics for tests / startup logging. */
 export function networkSummary(): string {
-  return `TLS=1.3, pins=${ANTHROPIC_PINS.length}, host=${ANTHROPIC_HOST}`
+  return `TLS>=1.2, pins=${ANTHROPIC_PINS.length}, pinned-hosts=${[...PINNED_HOSTS].join(',')}`
 }
 
 export function logNetworkConfig(): void {

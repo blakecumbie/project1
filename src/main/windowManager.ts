@@ -149,9 +149,13 @@ function attachSecurityListeners(win: BrowserWindow): void {
     event.preventDefault()
   })
 
-  // Refuse all permission requests at the contents level (also handled
-  // session-wide in csp.ts; this is defense in depth).
-  win.webContents.session.setPermissionRequestHandler((_wc, _p, cb) => cb(false))
+  // Allow audio-only microphone; deny camera and everything else.
+  // Mirrors the session-wide handler in csp.ts (defense in depth).
+  win.webContents.session.setPermissionRequestHandler((_wc, permission, cb, details) => {
+    if (permission !== 'media') { cb(false); return }
+    const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
+    cb(types.length > 0 && types.every((t) => t === 'audio'))
+  })
 }
 
 export function createMainWindow(): BrowserWindow {
@@ -192,9 +196,11 @@ export function createOverlayWindow(): BrowserWindow {
     frame: false,
     transparent: true,
     alwaysOnTop: true,
-    skipTaskbar: true,
+    // Show in the taskbar so a minimized overlay can be restored.
+    skipTaskbar: false,
     resizable: false,
     movable: true,
+    minimizable: true,
     show: false,
     webPreferences: {
       ...HARDENED_WEB_PREFERENCES,
@@ -235,6 +241,12 @@ export function showOverlay(): void {
 
 export function hideOverlay(): void {
   overlayWindow?.hide()
+}
+
+export function minimizeOverlay(): void {
+  if (overlayWindow && !overlayWindow.isDestroyed()) {
+    overlayWindow.minimize()
+  }
 }
 
 export function hideMain(): void {

@@ -48,9 +48,9 @@ export function EmptyState(): React.ReactElement {
         Start Recording
       </button>
 
-      {!settings.anthropicApiKey && (
+      {!settings.aiApiKey && settings.aiProvider !== 'openai-compatible' && (
         <p className="mt-5 text-xs text-amber-600 bg-amber-50 border border-amber-200 px-4 py-2 rounded-lg">
-          Add your Anthropic API key in Settings to enable AI descriptions
+          Add your API key in Settings to enable AI descriptions
         </p>
       )}
     </div>

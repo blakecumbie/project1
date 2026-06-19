@@ -1,6 +1,6 @@
 {
   "name": "sop-builder",
-  "version": "2.2.0",
+  "version": "2.2.4",
   "description": "AI-powered screen recording SOP document builder",
   "main": "./out/main/index.js",
   "scripts": {
@@ -22,10 +22,8 @@
     "better-sqlite3": "^9.4.3",
     "date-fns": "^3.3.1",
     "electron-store": "^8.2.0",
-    "jimp": "^0.22.12",
     "keytar": "^7.9.0",
     "pdf-lib": "^1.17.1",
-    "tesseract.js": "^5.0.4",
     "uiohook-napi": "^1.5.0",
     "uuid": "^9.0.0",
     "zod": "^3.22.4"
@@ -84,9 +82,7 @@
     "asarUnpack": [
       "**/node_modules/uiohook-napi/**",
       "**/node_modules/better-sqlite3/**",
-      "**/node_modules/keytar/**",
-      "**/node_modules/tesseract.js/**",
-      "**/node_modules/tesseract.js-core/**"
+      "**/node_modules/keytar/**"
     ],
     "win": {
       "target": [

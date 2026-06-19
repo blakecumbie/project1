@@ -32,7 +32,7 @@ const buildPolicy = (): string => {
     `style-src 'self' 'unsafe-inline'`,
     `img-src 'self' sopimg:`,
     `font-src 'self'`,
-    `media-src 'none'`,
+    `media-src 'self' blob:`,
     `connect-src ${connectSrc.join(' ')}`,
     `object-src 'none'`,
     `frame-ancestors 'none'`,
@@ -73,16 +73,24 @@ export function installContentSecurityPolicy(): void {
     headers['Cross-Origin-Resource-Policy'] = ['same-origin']
     headers['Cross-Origin-Embedder-Policy'] = ['require-corp']
     headers['Permissions-Policy'] = [
-      'camera=(), microphone=(), geolocation=(), display-capture=(), payment=(), usb=(), screen-wake-lock=()'
+      'camera=(), microphone=(self), geolocation=(), display-capture=(), payment=(), usb=(), screen-wake-lock=()'
     ]
 
     callback({ responseHeaders: headers })
   })
 
-  // Refuse all permission requests — the app does not ask the renderer for
-  // camera, mic, notifications, etc.
-  session.defaultSession.setPermissionRequestHandler((_wc, _permission, cb) => cb(false))
-  session.defaultSession.setPermissionCheckHandler(() => false)
+  // Allow microphone (audio-only) for voice recording; deny camera and everything else.
+  // 'media' covers both audio and video — inspect mediaTypes to restrict to audio only.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb, details) => {
+    if (permission !== 'media') { cb(false); return }
+    const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
+    cb(types.length > 0 && types.every((t) => t === 'audio'))
+  })
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, _origin, details) => {
+    if (permission !== 'media') return false
+    const types = (details as { mediaType?: string }).mediaType
+    return types === 'audio'
+  })
 
   // Block any certificate-error fallback. Pinning is enforced separately;
   // this is the last line of defense if Chromium's chain validation fails.

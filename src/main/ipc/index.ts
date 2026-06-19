@@ -4,6 +4,7 @@ import { registerStepHandlers } from './stepHandlers'
 import { registerAiHandlers } from './aiHandlers'
 import { registerExportHandlers } from './exportHandlers'
 import { registerSettingsHandlers } from './settingsHandlers'
+import { registerAudioHandlers } from './audioHandlers'
 
 export function registerAllIpcHandlers(): void {
   registerRecordingHandlers()
@@ -12,4 +13,5 @@ export function registerAllIpcHandlers(): void {
   registerAiHandlers()
   registerExportHandlers()
   registerSettingsHandlers()
+  registerAudioHandlers()
 }

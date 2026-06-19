@@ -1,14 +1,13 @@
 import { EventEmitter } from 'events'
 import type { RecordingState, StartRecordingPayload } from '@shared/types'
 import { inputHooks, type CapturedEvent } from './inputHooks'
-import { captureScreen, getClickDotPosition, getJpegDimensions } from './screenshotCapture'
+import { captureScreen, getClickDotPosition, getJpegDimensions, getDisplayForPoint } from './screenshotCapture'
 import { stepsRepo } from './database/stepsRepo'
 import { projectsRepo } from './database/projectsRepo'
 import { saveImageBuffer, saveFullImageBuffer, getRelativeImagePath, getRelativeFullImagePath } from './utils/fileStore'
 import { logger } from './utils/logger'
 import { DEFAULT_CROP_RADIUS, DEFAULT_SCREENSHOT_DELAY_MS } from '@shared/constants'
 import type { Annotation } from '@shared/types'
-import { redactSensitive } from './security/redaction'
 
 export class RecordingSession extends EventEmitter {
   private _state: RecordingState = 'idle'
@@ -18,6 +17,7 @@ export class RecordingSession extends EventEmitter {
   private pendingEvent: CapturedEvent | null = null
   private stepCount = 0
   private startTime = 0
+  private voiceEnabled = false
   private elapsedTimer: ReturnType<typeof setInterval> | null = null
 
   // Serial processing queue — guarantees events are persisted in chronological order
@@ -47,6 +47,7 @@ export class RecordingSession extends EventEmitter {
     this.projectId = config.projectId
     this.stepCount = 0
     this.startTime = Date.now()
+    this.voiceEnabled = config.captureVoice ?? false
     this._state = 'recording'
     this.processQueue = Promise.resolve()
 
@@ -103,6 +104,7 @@ export class RecordingSession extends EventEmitter {
     this.config = null
     this.startTime = 0
     this.stepCount = 0
+    this.voiceEnabled = false
 
     this.emitState()
     logger.info(`Recording stopped. Project: ${pid}`)
@@ -137,34 +139,36 @@ export class RecordingSession extends EventEmitter {
 
     try {
       const cropRadius = this.config.cropRadius ?? DEFAULT_CROP_RADIUS
+
+      // uiohook reports GLOBAL virtual-desktop coordinates. Resolve which
+      // display the action happened on, honour the user's multi-screen
+      // selection, then translate the point into that display's local space
+      // before capturing/cropping.
+      let targetDisplayId: string | undefined
+      let localX = event.x ?? undefined
+      let localY = event.y ?? undefined
+
+      if (event.x !== null && event.y !== null) {
+        const disp = getDisplayForPoint(event.x, event.y)
+        const selected = this.config.displayIds
+        if (selected && selected.length > 0 && !selected.includes(disp.id)) {
+          // Action landed on a screen the user chose not to record — skip it.
+          return
+        }
+        targetDisplayId = disp.id
+        localX = event.x - disp.bounds.x
+        localY = event.y - disp.bounds.y
+      }
+
       const result = await captureScreen({
-        displayId: this.config.displayId,
-        cropX: event.x ?? undefined,
-        cropY: event.y ?? undefined,
+        displayId: targetDisplayId,
+        cropX: localX,
+        cropY: localY,
         cropRadius
       })
 
       if (result) {
-        // ── PII / PCI redaction (in-memory) ──────────────────────────────
-        // Both the cropped and full screenshots are passed through the
-        // local OCR + redaction pipeline BEFORE they are persisted to disk
-        // or sent to the LLM. The originals are zeroed by `redactSensitive`.
-        let redactedCropped: Buffer
-        let redactedFull: Buffer
-        try {
-          const cropResult = await redactSensitive(result.croppedBuffer)
-          redactedCropped = cropResult.buffer
-          const fullResult = await redactSensitive(result.fullBuffer)
-          redactedFull = fullResult.buffer
-        } catch (err) {
-          logger.error(`Redaction failed; dropping step: ${String(err)}`)
-          // Fail-closed: do not persist anything we couldn't redact.
-          result.croppedBuffer.fill(0)
-          result.fullBuffer.fill(0)
-          return
-        }
-
-        const dims = getJpegDimensions(redactedCropped)
+        const dims = getJpegDimensions(result.croppedBuffer)
         const screenshotWidth = dims?.width ?? null
         const screenshotHeight = dims?.height ?? null
 
@@ -188,12 +192,12 @@ export class RecordingSession extends EventEmitter {
           capturedAt: event.timestamp
         })
 
-        saveImageBuffer(this.projectId, step.id, redactedCropped)
-        saveFullImageBuffer(this.projectId, step.id, redactedFull)
+        saveImageBuffer(this.projectId, step.id, result.croppedBuffer)
+        saveFullImageBuffer(this.projectId, step.id, result.fullBuffer)
         // Zero the buffers we just persisted — the bytes have been written
         // to disk; we no longer need them in RAM.
-        redactedCropped.fill(0)
-        redactedFull.fill(0)
+        result.croppedBuffer.fill(0)
+        result.fullBuffer.fill(0)
 
         const realPath = getRelativeImagePath(this.projectId, step.id)
         const realFullPath = getRelativeFullImagePath(this.projectId, step.id)
@@ -201,11 +205,11 @@ export class RecordingSession extends EventEmitter {
         // Click-dot annotation, in cropped image pixel coordinates
         if (
           (event.type === 'click' || event.type === 'right_click' || event.type === 'double_click') &&
-          event.x !== null && event.y !== null &&
+          localX !== undefined && localY !== undefined &&
           screenshotWidth && screenshotHeight
         ) {
           const dotPos = getClickDotPosition(
-            event.x, event.y,
+            localX, localY,
             result.cropX, result.cropY,
             result.cropRadius,
             result.displayWidth, result.displayHeight,
@@ -259,12 +263,23 @@ export class RecordingSession extends EventEmitter {
     }
   }
 
-  private emitState(): void {
+  get startedAt(): number {
+    return this.startTime
+  }
+
+  get isVoiceEnabled(): boolean {
+    return this.voiceEnabled
+  }
+
+  private emitState(voiceMuted = false): void {
     this.emit('stateChanged', {
       state: this._state,
       projectId: this.projectId,
       stepCount: this.stepCount,
-      elapsedMs: this.elapsedMs
+      elapsedMs: this.elapsedMs,
+      startedAt: this.startTime,
+      voiceEnabled: this.voiceEnabled,
+      voiceMuted
     })
   }
 }

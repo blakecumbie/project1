@@ -14,7 +14,8 @@ import type {
   IpcResult,
   DisplayInfo,
   ExportPayload,
-  UpdateCropPayload
+  UpdateCropPayload,
+  VoiceTranscriptionProgress
 } from '../../../shared/types'
 
 declare global {
@@ -60,12 +61,15 @@ export const recording = {
   stop: () => invoke<{ projectId: string }>(IPC.RECORDING_STOP),
   pause: () => invoke<{ success: boolean }>(IPC.RECORDING_PAUSE),
   resume: () => invoke<{ success: boolean }>(IPC.RECORDING_RESUME),
+  minimizeOverlay: () => invoke<{ success: boolean }>(IPC.RECORDING_MINIMIZE_OVERLAY),
   getDisplays: () => invoke<DisplayInfo[]>(IPC.GET_DISPLAYS),
 
   onStateChanged: (cb: (p: RecordingStateChangedPayload) => void) =>
     window.api.on(IPC.RECORDING_STATE_CHANGED, cb as (...args: unknown[]) => void),
   onStepCaptured: (cb: (p: StepCapturedPayload) => void) =>
     window.api.on(IPC.RECORDING_STEP_CAPTURED, cb as (...args: unknown[]) => void),
+  onTick: (cb: (p: { elapsedMs: number; stepCount: number }) => void) =>
+    window.api.on(IPC.RECORDING_TICK, cb as (...args: unknown[]) => void),
   onError: (cb: (p: { message: string }) => void) =>
     window.api.on(IPC.RECORDING_ERROR, cb as (...args: unknown[]) => void)
 }
@@ -99,4 +103,14 @@ export const exportApi = {
 export const settingsApi = {
   get: () => invoke<AppSettings>(IPC.SETTINGS_GET),
   set: (patch: Partial<AppSettings>) => invoke<AppSettings>(IPC.SETTINGS_SET, patch)
+}
+
+// ── Audio / Voice ─────────────────────────────────────────────────────────────
+export const audioApi = {
+  check: (projectId: string) => invoke<{ exists: boolean }>(IPC.AUDIO_CHECK, projectId),
+  transcribe: (projectId: string) => invoke<{ ok: boolean }>(IPC.AI_TRANSCRIBE, projectId),
+  onTranscriptionProgress: (cb: (p: VoiceTranscriptionProgress) => void) =>
+    window.api.on(IPC.AI_TRANSCRIPTION_PROGRESS, cb as (...args: unknown[]) => void),
+  onMuteState: (cb: (p: { muted: boolean }) => void) =>
+    window.api.on(IPC.AUDIO_MUTE_STATE, cb as (...args: unknown[]) => void)
 }

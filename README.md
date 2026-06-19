@@ -18,6 +18,51 @@ An AI-powered screen recording SOP (Standard Operating Procedure) document build
 - **Export** — PDF, HTML (self-contained), and Markdown formats
 - **Per-user install on Windows** — no admin privileges required
 
+## What's new in v2.2.2 (multi-screen recording + overlay fixes)
+
+- **Record multiple screens simultaneously** — the Start Recording dialog now
+  lets you tick one or more connected displays (all are selected by default).
+  Each captured action is screenshotted on whichever selected screen it happens
+  on. Under the hood, the global click position is now mapped to the correct
+  monitor and translated into that display's local space before cropping —
+  which also fixes screenshots on secondary monitors being cropped from the
+  wrong spot.
+- **Working Pause & Stop on the recording control** — the floating control's
+  buttons were nested inside the window's drag region, which on a frameless,
+  transparent window swallowed their clicks. The drag region is now limited to
+  the status area, so the buttons respond reliably.
+- **Cleaner recording control** — removed the white box that appeared around the
+  floating pill (the shared app background was painting behind the transparent
+  window) and removed the live step counter. A small "Paused" label now shows
+  when recording is paused.
+- **Removed automatic on-screen redaction** — the OCR pipeline that blacked out
+  detected card numbers / SSNs / financial text on every screenshot has been
+  removed. Screenshots are now stored exactly as captured. (You can still draw
+  manual redaction boxes in the screenshot editor.)
+
+## What's new in v2.2.1 (recording overlay fixes + multi-provider AI)
+
+- **Recording overlay** — the floating timer and step counter now actually
+  update during a recording session (the v2.2 release wasn't relaying the 1Hz
+  tick or per-step events to the overlay window). The overlay is also now
+  draggable from any non-button area and has a new minimize button so it
+  collapses to the taskbar instead of staying stuck on top.
+- **Anthropic API key works again** — v2.2 introduced a hard cert-pinning
+  requirement that bricked every Anthropic call when no `ANTHROPIC_PINS` env
+  was supplied. Pinning is now opt-in: TLS is still locked to ≥ 1.2 and
+  Chromium's chain validation runs as normal, but the connection isn't
+  refused when no pins are configured.
+- **Multi-provider AI** — pick your provider in Settings:
+  - **Anthropic** (Claude Haiku / Sonnet / Opus)
+  - **OpenAI** (GPT-4o / GPT-4o mini / GPT-4.1)
+  - **Google** (Gemini 2.0 / 2.5 Flash, 2.5 Pro)
+  - **Custom / Self-hosted (OpenAI-compatible)** — point at Ollama,
+    LM Studio, vLLM, OpenRouter, Groq, Together, etc. Local servers don't
+    need an API key.
+  Existing v2.2.0 users with an Anthropic key set via the old `Anthropic
+  API Key` field are migrated automatically on first launch — no re-entry
+  required.
+
 ## What's new in v2.2 (enterprise security hardening)
 
 This release re-engineers the app to enterprise security standards required
@@ -36,10 +81,6 @@ data. Full report and threat model in [`SECURITY.md`](SECURITY.md).
 - **IPC payload validation** — every `ipcMain` channel is wrapped with a Zod
   schema; malformed or oversized payloads are rejected before reaching repos
   or the filesystem.
-- **Local PII / PCI redaction** — every screenshot is OCR'd in-memory by a
-  sandboxed Tesseract.js (WASM) worker; Luhn-validated card numbers, SSNs,
-  ABA/IBAN account numbers and financial-table headings are blacked out
-  before the bytes are ever written to disk or sent to the LLM.
 - **AES-256-GCM at rest + OS key vault** — a 32-byte master key is generated
   and stored in the OS credential manager via `keytar` (Windows Credential
   Manager / macOS Keychain / Linux Secret Service). The Anthropic API key is
@@ -63,8 +104,8 @@ data. Full report and threat model in [`SECURITY.md`](SECURITY.md).
   OS vault. Existing plaintext SQLite entries are migrated transparently on
   first launch.
 - `OPEN_EXTERNAL` only opens an allow-listed set of HTTPS hosts.
-- `electron-builder` now unpacks `keytar` and `tesseract.js` from the asar
-  archive — rebuild your installer with `npm run package:win` to pick this up.
+- `electron-builder` now unpacks `keytar` from the asar archive — rebuild your
+  installer with `npm run package:win` to pick this up.
 
 ## What's new in v2.1 (bug fixes)
 
@@ -74,9 +115,9 @@ data. Full report and threat model in [`SECURITY.md`](SECURITY.md).
 - **Inline description editing** — `Ctrl+Enter` saves, `Esc` cancels, and the textarea no longer shows a stale value when an AI-generated description arrives after mount.
 - **Screenshot dimensions persisted** — fixes alignment of all SVG annotations against the actual image (was previously falling back to a 900×600 viewBox).
 
-## Upgrading from v1.x, v2.0, or v2.1
+## Upgrading from v1.x, v2.0, v2.1, or v2.2.0
 
-1. Download `releases/SOP-Builder-Setup-2.2.0.exe`
+1. Download `releases/SOP-Builder-Setup-2.2.1.exe`
 2. Run it — **no need to uninstall the previous version first.** It overwrites the app files in place.
 3. SmartScreen may warn again. Click **More info → Run anyway**.
 4. Your existing guides and settings are preserved automatically.
@@ -84,7 +125,7 @@ data. Full report and threat model in [`SECURITY.md`](SECURITY.md).
 
 ## Installation (Windows 11 — no admin required)
 
-**Latest installer:** [`releases/SOP-Builder-Setup-2.2.0.exe`](releases/SOP-Builder-Setup-2.2.0.exe)
+**Latest installer:** [`releases/SOP-Builder-Setup-2.2.1.exe`](releases/SOP-Builder-Setup-2.2.1.exe)
 
 1. Download the `.exe` (85 MB)
 2. Double-click to run — **no UAC prompt, no admin required**
